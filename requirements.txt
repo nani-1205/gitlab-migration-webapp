@@ -1,0 +1,5 @@
+Flask
+python-gitlab
+python-dotenv
+GitPython  # For easier Git operations (optional, can use subprocess)
+# Potentially: Celery, Redis (for background tasks and message queue)

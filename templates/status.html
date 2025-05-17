@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Migration Status</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+     <meta http-equiv="refresh" content="10"> <!-- Auto-refresh page every 10 seconds -->
+</head>
+<body>
+    <div class="container">
+        <h1>Migration Status & Log</h1>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Control Panel</a>
+        <p><strong>Migration In Progress:</strong> {{ 'Yes' if is_migrating else 'No' }}</p>
+        <h3>Log:</h3>
+        <pre style="height: 600px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5;">
+            {% for entry in log_entries %}
+                {{ entry }}
+            {% endfor %}
+        </pre>
+    </div>
+</body>
+</html>
