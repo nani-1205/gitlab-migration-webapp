@@ -303,7 +303,7 @@ def run_full_migration():
     for old_id, new_id in OLD_TO_NEW_GROUP_ID_MAP.items():
         log_status(f"  Old Group ID: {old_id} -> New Group ID: {new_id}")
 
-    log_status("=== PHASE 2: Migrating Projects and Repositories ==="
+    log_status("=== PHASE 2: Migrating Projects and Repositories ===")
     migrated_project_repo_count = 0
     failed_project_repo_count = 0
     
