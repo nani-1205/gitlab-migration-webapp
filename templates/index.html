@@ -3,66 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitLab Migration Tool</title>
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-          integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
-          crossorigin="anonymous">
-    <!-- Custom CSS -->
+    <title>GitLab Migration Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .progress-bar { transition: width 0.5s ease-in-out; }
+    </style>
 </head>
 <body>
-    <div class="container mt-4">
+    <div class="container mt-3 mb-3">
         <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h1>GitLab Migration Control Panel</h1>
+            <div class="card-header bg-dark text-white">
+                <h1 class="h3 mb-0">GitLab Migration Control Panel</h1>
             </div>
             <div class="card-body">
-                <div class="config-details mb-4">
-                    <h5 class="card-title">Current Configuration (from .env)</h5>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <strong>Old GitLab URL:</strong> <span id="oldGitlabUrl">{{ config.OLD_GITLAB_URL }}</span>
-                        </li>
-                        <li class="list-group-item">
-                            <strong>New GitLab URL:</strong> <span id="newGitlabUrl">{{ config.NEW_GITLAB_URL }}</span>
-                        </li>
-                        <!-- Add other relevant, non-sensitive config details here if needed -->
-                        <!-- Example:
-                        <li class="list-group-item">
-                            <strong>Migration Mode:</strong> Groups, Projects, Repositories (Git Data Only)
-                        </li>
-                        -->
-                    </ul>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Source:</strong> <span id="sourceUrl">{{ config.OLD_GITLAB_URL }}</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Target:</strong> <span id="targetUrl">{{ config.NEW_GITLAB_URL }}</span>
+                    </div>
                 </div>
 
                 <form id="migrationForm" class="mb-3">
                     <button type="submit" id="startMigrationButton" class="btn btn-lg btn-success btn-block">
-                        Start Full Migration (Groups, Projects, Repos)
+                        Start Full Migration
                     </button>
                 </form>
-                <a href="{{ url_for('migration_status_page') }}" id="viewStatusButton" class="btn btn-info btn-block">View Migration Status/Log Page</a>
-
-                <hr class="my-4">
-
-                <h3>Live Migration Log:</h3>
-                <div class="log-container">
-                    <pre id="liveLog"></pre>
+                <a href="{{ url_for('migration_status_page_route') }}" class="btn btn-info btn-block mb-3">View Static Log Page</a>
+                
+                <hr>
+                <h4 class="mb-3">Live Progress:</h4>
+                <div class="mb-2">
+                    <strong>Overall Status:</strong> <span id="overallStatus" class="font-weight-bold">Idle</span>
                 </div>
-                 <button id="clearLogButton" class="btn btn-sm btn-warning mt-2">Clear Client-Side Log</button>
-            </div>
-            <div class="card-footer text-muted">
-                <p id="migrationState" class="mb-0">Status: Idle</p>
+                <div class="mb-3">
+                    <strong>Current Action:</strong> <span id="currentActionText">Waiting to start...</span>
+                </div>
+
+                <!-- Stats -->
+                <div id="statsContainer">
+                    <!-- Stats will be dynamically inserted here by JS -->
+                </div>
+                
+                <h5 class="mt-4">Live Log (<span id="logCount">0</span> entries):</h5>
+                 <button id="clearLogButton" class="btn btn-sm btn-outline-warning float-right mb-1">Clear Client Log</button>
+                <div class="log-container">
+                    <pre id="liveLogOutput"></pre>
+                </div>
+                 <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap JS and dependencies (optional, if needed for Bootstrap components beyond styling) -->
-    <!-- <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script> -->
-    <!-- <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js" integrity="sha384-eA6P5S93u4zQf6m6W12fKnjHjOMs9z4pW0Z6aJb1E3jFzLg8jRgsfD/2C8FfN/wX" crossorigin="anonymous"></script> -->
-    <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script> -->
-    
-    <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

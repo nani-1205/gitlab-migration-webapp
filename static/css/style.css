@@ -1,83 +1,75 @@
 body {
-    font-family: sans-serif;
-    padding: 20px;
-    background-color: #f4f7f6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding-top: 1rem;
+    background-color: #eef2f7; /* Light cool gray background */
     color: #333;
+    line-height: 1.6;
 }
 
 .container {
-    max-width: 900px;
-    margin: 0 auto;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 1000px; /* Wider for dashboard */
 }
 
-h1 {
-    color: #2c3e50;
-    text-align: center;
-    margin-bottom: 30px;
+.card-header h1 {
+    font-size: 1.75rem; /* Slightly smaller h1 in card header */
+    margin-bottom: 0;
 }
 
-.config-details {
-    margin-bottom: 30px;
-    border: 1px solid #e0e0e0;
+.config-details h5 {
+    color: #495057;
 }
 
-.config-details .card-header {
-    background-color: #e9ecef;
-    font-weight: bold;
-}
-
-#migrationForm button {
-    padding: 10px 20px;
-    font-size: 1.1em;
-}
-
-#liveLog {
-    height: 400px;
+.log-container {
+    height: 350px; /* Adjusted height */
     overflow-y: scroll;
-    border: 1px solid #ccc;
+    border: 1px solid #ced4da; /* Standard bootstrap border color */
     padding: 15px;
     background-color: #282c34; /* Dark background for log */
-    color: #abb2bf; /* Light text for log */
-    font-family: "Courier New", Courier, monospace;
+    color: #d1d5db; /* Lighter gray for log text */
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 0.875em; /* Slightly smaller mono font */
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+    border-radius: .25rem; /* Bootstrap border radius */
+    margin-top: 0.5rem;
+}
+/* For static log page */
+.log-output-static {
+    max-height: 70vh;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 1rem;
+    font-family: monospace;
     font-size: 0.9em;
-    white-space: pre-wrap; /* Wrap long lines */
-    word-wrap: break-word; /* Break words if necessary */
-    border-radius: 4px;
-    margin-top: 15px;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
-.btn-primary {
-    background-color: #3498db;
-    border-color: #3498db;
-}
-.btn-primary:hover {
-    background-color: #2980b9;
-    border-color: #2980b9;
+
+.stat-item {
+    background-color: #f8f9fa; /* Light gray background for stat items */
+    padding: 0.75rem 1rem;
+    border-radius: .25rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid #e9ecef;
 }
 
-.btn-info {
-    background-color: #1abc9c;
-    border-color: #1abc9c;
-}
-.btn-info:hover {
-    background-color: #16a085;
-    border-color: #16a085;
+.stat-item .progress {
+    height: 10px; /* Slimmer progress bar */
+    margin-top: 0.25rem;
 }
 
-.btn-secondary {
-    background-color: #7f8c8d;
-    border-color: #7f8c8d;
+.stat-item h6 {
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: #007bff
 }
-.btn-secondary:hover {
-    background-color: #6c7a7b;
-    border-color: #6c7a7b;
+.stat-item p {
+    font-size: 0.9em;
+    margin-bottom: 0.1rem;
+    color: #6c757d;
 }
-
-hr {
-    margin-top: 30px;
-    margin-bottom: 30px;
+.stat-item span.font-weight-bold {
+    color: #28a745; /* Green for completed counts */
 }

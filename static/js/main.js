@@ -1,181 +1,164 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // --- DOM Elements ---
-    const migrationForm = document.getElementById('migrationForm');
-    const liveLogArea = document.getElementById('liveLog');
-    const startMigrationButton = document.getElementById('startMigrationButton'); // Specific button
-    const viewStatusButton = document.getElementById('viewStatusButton');
+    const startMigrationButton = document.getElementById('startMigrationButton');
+    const liveLogOutput = document.getElementById('liveLogOutput');
     const clearLogButton = document.getElementById('clearLogButton');
-    const migrationStateElement = document.getElementById('migrationState');
+    const overallStatusElement = document.getElementById('overallStatus');
+    const currentActionElement = document.getElementById('currentActionText');
+    const statsContainer = document.getElementById('statsContainer');
+    const errorMessageElement = document.getElementById('errorMessage');
+    const logCountElement = document.getElementById('logCount');
 
-    // --- State & Configuration ---
     let pollingInterval;
-    const pollingTime = 5000; // Poll every 5 seconds
+    const pollingTime = 3000; // Poll every 3 seconds
 
-    // URLs for Flask routes (these are relative paths, Flask handles the full URL)
     const startMigrationUrl = "/start-migration"; 
-    const getStatusLogUrl = "/get-status-log";
+    const getStatusUrl = "/get-status"; // Changed from get-status-log
 
-    // --- Event Listeners ---
+    function updateButtonState(isMigrating) {
+        if (startMigrationButton) {
+            startMigrationButton.disabled = isMigrating;
+            startMigrationButton.textContent = isMigrating ? 'Migration in Progress...' : 'Start Full Migration (Groups, Projects, Repos)';
+        }
+    }
+    
+    function updateOverallStatusUI(statusData) {
+        if (overallStatusElement) {
+            overallStatusElement.textContent = statusData.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+        }
+        if (currentActionElement) {
+            currentActionElement.textContent = statusData.current_action || "Waiting...";
+        }
+        if (errorMessageElement) {
+            if (statusData.error_message) {
+                errorMessageElement.textContent = `Error: ${statusData.error_message}`;
+                errorMessageElement.style.display = 'block';
+            } else {
+                errorMessageElement.style.display = 'none';
+            }
+        }
+    }
+
+    function updateStatsUI(stats) {
+        if (!statsContainer) return;
+        statsContainer.innerHTML = ''; // Clear previous stats
+
+        const sectionOrder = ['groups', 'projects']; // Define order
+
+        sectionOrder.forEach(sectionKey => {
+            if (stats[sectionKey]) {
+                const stat = stats[sectionKey];
+                const percentage = stat.total > 0 ? (stat.completed / stat.total) * 100 : 0;
+                
+                const statDiv = document.createElement('div');
+                statDiv.className = 'stat-item';
+                statDiv.innerHTML = `
+                    <h6>${sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1)} Migration</h6>
+                    <p>Processed: <span class="font-weight-bold">${stat.completed}</span> / ${stat.total}</p>
+                    ${stat.current_item_name ? `<p class="text-muted small">Current: ${stat.current_item_name.length > 50 ? stat.current_item_name.substring(0,47)+'...' : stat.current_item_name}</p>` : ''}
+                    <div class="progress">
+                        <div class="progress-bar ${percentage === 100 ? 'bg-success' : 'bg-info'}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">
+                           ${Math.round(percentage)}%
+                        </div>
+                    </div>
+                `;
+                statsContainer.appendChild(statDiv);
+            }
+        });
+    }
+    
+    function updateLogUI(logEntries) {
+        if (liveLogOutput) {
+            liveLogOutput.innerHTML = logEntries.map(log => {
+                let colorClass = "text-light"; // Default for info
+                if (log.type === "warning") colorClass = "text-warning";
+                if (log.type === "error") colorClass = "text-danger font-weight-bold";
+                return `<div class="${colorClass}"><span class="text-muted">[${log.timestamp}]</span> ${log.message}</div>`;
+            }).join('');
+            liveLogOutput.scrollTop = liveLogOutput.scrollHeight;
+        }
+        if(logCountElement) {
+            logCountElement.textContent = logEntries.length;
+        }
+    }
+
+    function fetchAndUpdateStatus() {
+        fetch(getStatusUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error ${response.status} fetching status`);
+                return response.json();
+            })
+            .then(data => {
+                updateButtonState(data.status === "running" || data.status === "initializing" || data.status === "migrating_groups" || data.status === "migrating_projects");
+                updateOverallStatusUI(data);
+                updateStatsUI(data.stats);
+                updateLogUI(data.logs);
+
+                if (!(data.status === "running" || data.status === "initializing" || data.status === "migrating_groups" || data.status === "migrating_projects") && pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching status:', error);
+                if (overallStatusElement) overallStatusElement.textContent = "Error fetching status.";
+                if (pollingInterval) clearInterval(pollingInterval); // Stop polling on error
+                pollingInterval = null;
+                updateButtonState(false); // Re-enable button on error
+            });
+    }
+
     if (migrationForm && startMigrationButton) {
         migrationForm.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent default form submission
-            
+            event.preventDefault();
             startMigrationButton.disabled = true;
-            startMigrationButton.textContent = 'Starting Migration...';
-            if (migrationStateElement) migrationStateElement.textContent = 'Status: Initiating...';
+            startMigrationButton.textContent = 'Initiating Migration...';
+            if (overallStatusElement) overallStatusElement.textContent = 'Initiating...';
+            if (errorMessageElement) errorMessageElement.style.display = 'none';
+
 
             fetch(startMigrationUrl, { method: 'POST' })
                 .then(response => {
-                    if (!response.ok) {
-                        // Try to get more specific error from JSON response if available
-                        return response.json().then(errData => {
-                            throw new Error(errData.message || `HTTP error ${response.status}`);
-                        }).catch(() => { // Fallback if no JSON in error
-                            throw new Error(`HTTP error ${response.status}`);
-                        });
-                    }
+                    if (!response.ok) return response.json().then(err => { throw err; });
                     return response.json();
                 })
                 .then(data => {
-                    alert(data.message || "Migration request sent to server.");
-                    if (data.status === 'success') {
-                        startMigrationButton.textContent = 'Migration in Progress...';
-                        if (migrationStateElement) migrationStateElement.textContent = 'Status: Migrating...';
-                        pollStatus(); // Start polling for log updates
-                    } else {
-                        // If server indicates start failure (e.g., already running)
-                        startMigrationButton.disabled = false;
-                        startMigrationButton.textContent = 'Start Full Migration (Groups, Projects, Repos)';
-                        if (migrationStateElement) migrationStateElement.textContent = `Status: Idle (Start failed: ${data.message || ''})`;
+                    alert(data.message); // Simple feedback
+                    if (data.status === 'success' || data.status === 'warning') { // warning if already running
+                        if (!pollingInterval) { // Start polling only if not already polling
+                           fetchAndUpdateStatus(); // Immediate update
+                           pollingInterval = setInterval(fetchAndUpdateStatus, pollingTime);
+                        }
+                    } else { // On failure to start
+                        updateButtonState(false);
+                         if (overallStatusElement) overallStatusElement.textContent = `Idle (Start Failed: ${data.message || 'Unknown'})`;
                     }
                 })
                 .catch(error => {
                     console.error('Error starting migration:', error);
-                    alert('Error starting migration: ' + error.message);
-                    startMigrationButton.disabled = false;
-                    startMigrationButton.textContent = 'Start Full Migration (Error - Retry?)';
-                    if (migrationStateElement) migrationStateElement.textContent = 'Status: Error starting migration.';
+                    alert('Error starting migration: ' + (error.message || error));
+                    updateButtonState(false);
+                    if (overallStatusElement) overallStatusElement.textContent = 'Error starting migration.';
                 });
         });
     }
 
-    if (clearLogButton && liveLogArea) {
+    if (clearLogButton && liveLogOutput) {
         clearLogButton.addEventListener('click', function() {
-            liveLogArea.textContent = '[Client-side log display cleared]\n';
-            // Note: This only clears the display in *this* browser window.
-            // It doesn't affect the server-side log or other connected clients.
-            // Re-fetch immediately to show current server state if desired,
-            // or just let the next poll update it.
-            // For now, we'll let the poll handle it or a manual refresh of status page.
+            liveLogOutput.innerHTML = '<div class="text-muted">[Client-side log display cleared]</div>';
+            if(logCountElement) logCountElement.textContent = 0;
+            // Server log is not affected
         });
     }
 
-    // --- Core Functions ---
-    function fetchLog() {
-        if (!liveLogArea && !migrationButton && !migrationStateElement) {
-            // If essential elements are missing, don't try to fetch
-            // This might happen if this script is loaded on a page without these elements
-            if (pollingInterval) clearInterval(pollingInterval);
-            return;
-        }
-
-        fetch(getStatusLogUrl)
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(errData => {
-                        throw new Error(errData.message || `HTTP error ${response.status} fetching log`);
-                    }).catch(() => {
-                        throw new Error(`HTTP error ${response.status} fetching log (no JSON error body)`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (liveLogArea) {
-                    // Append new log entries rather than replacing, if that's desired,
-                    // but simple replacement is easier for now based on server sending full log.
-                    liveLogArea.textContent = data.log.join('\n');
-                    liveLogArea.scrollTop = liveLogArea.scrollHeight; // Auto-scroll to bottom
-                }
-                
-                if (startMigrationButton) { // Check if button exists
-                    if (data.is_migrating) {
-                        startMigrationButton.disabled = true;
-                        startMigrationButton.textContent = 'Migration in Progress...';
-                        if (migrationStateElement) migrationStateElement.textContent = 'Status: Migrating...';
-                    } else {
-                        startMigrationButton.disabled = false;
-                        startMigrationButton.textContent = 'Start Full Migration (Groups, Projects, Repos)';
-                        if (migrationStateElement) migrationStateElement.textContent = 'Status: Idle / Completed';
-                        if (pollingInterval) {
-                            clearInterval(pollingInterval); 
-                            pollingInterval = null; // Clear interval ID
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching log:', error);
-                if (liveLogArea) {
-                    // Avoid clearing existing log on fetch error, just append error
-                    const currentLog = liveLogArea.textContent;
-                    liveLogArea.textContent = currentLog + (currentLog ? '\n' : '') + 'Error fetching log: ' + error.message;
-                    liveLogArea.scrollTop = liveLogArea.scrollHeight;
-                }
-                if (migrationStateElement) migrationStateElement.textContent = 'Status: Error fetching log.';
-                
-                // Optionally stop polling on repeated errors, or implement backoff
-                if (pollingInterval) {
-                    // clearInterval(pollingInterval); // Decide if you want to stop on error
-                    // pollingInterval = null;
-                }
-                if (startMigrationButton) { // Check if button exists
-                     // Don't re-enable start button just because log fetch failed if migration might still be running
-                     // The is_migrating flag from server is the source of truth for this.
-                }
-            });
-    }
-
-    function pollStatus() {
-        fetchLog(); // Initial fetch
-        if (pollingInterval) clearInterval(pollingInterval); // Clear any existing interval just in case
-
-        // Start polling only if the button is in a state that implies migration is active
-        // or could become active. A better check is the 'is_migrating' flag from an initial status check.
-        if (startMigrationButton && startMigrationButton.disabled) { 
-            pollingInterval = setInterval(fetchLog, pollingTime);
-        } else if (startMigrationButton && !startMigrationButton.disabled) {
-            // If button is enabled, means migration is not running (or just finished), so don't start polling.
-            // However, we might want one initial fetch on page load regardless.
-        }
-    }
-    
-    // --- Initial Page Load Logic ---
-    // Fetch initial status and log. Start polling if migration is already in progress.
-    // This handles page reloads while a migration is running in the background.
-    fetch(getStatusLogUrl)
-        .then(response => response.json())
-        .then(data => {
-            if (liveLogArea) { // Update log area on initial load
-                liveLogArea.textContent = data.log.join('\n');
-                liveLogArea.scrollTop = liveLogArea.scrollHeight;
+    // Initial status check on page load
+    fetchAndUpdateStatus();
+    // If the initial status indicates migration is ongoing, start polling
+    fetch(getStatusUrl).then(r=>r.json()).then(data => {
+        if(data.status === "running" || data.status === "initializing" || data.status === "migrating_groups" || data.status === "migrating_projects"){
+            if (!pollingInterval) {
+                pollingInterval = setInterval(fetchAndUpdateStatus, pollingTime);
             }
-            if (startMigrationButton) { // Check if button exists
-                if (data.is_migrating) {
-                    startMigrationButton.disabled = true;
-                    startMigrationButton.textContent = 'Migration in Progress...';
-                    if (migrationStateElement) migrationStateElement.textContent = 'Status: Migrating...';
-                    pollStatus(); // Start polling as migration is active
-                } else {
-                    startMigrationButton.disabled = false;
-                    startMigrationButton.textContent = 'Start Full Migration (Groups, Projects, Repos)';
-                    if (migrationStateElement) migrationStateElement.textContent = 'Status: Idle / Completed';
-                }
-            }
-        })
-        .catch(error => {
-            console.error("Initial status fetch failed:", error);
-            if (migrationStateElement) migrationStateElement.textContent = 'Status: Could not fetch initial status.';
-        });
+        }
+    });
 
-}); // End of DOMContentLoaded
+}); // End DOMContentLoaded

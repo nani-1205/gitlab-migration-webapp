@@ -2,20 +2,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Migration Status</title>
+    <title>Migration Full Log</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-     <meta http-equiv="refresh" content="10"> <!-- Auto-refresh page every 10 seconds -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta http-equiv="refresh" content="30"> <!-- Auto-refresh every 30 seconds -->
 </head>
 <body>
-    <div class="container">
-        <h1>Migration Status & Log</h1>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Control Panel</a>
-        <p><strong>Migration In Progress:</strong> {{ 'Yes' if is_migrating else 'No' }}</p>
-        <h3>Log:</h3>
-        <pre style="height: 600px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5;">
-            {% for entry in log_entries %}
-                {{ entry }}
+    <div class="container mt-3">
+        <h1>Migration Full Log</h1>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Dashboard</a>
+        <p><strong>Current Migration Status:</strong> <span class="font-weight-bold">{{ current_state.status }}</span></p>
+        <p><strong>Current Action:</strong> {{ current_state.current_action }}</p>
+        
+        <h5>Stats:</h5>
+        <ul>
+            {% for section, data in current_state.stats.items() %}
+            <li>
+                <strong>{{ section|capitalize }}:</strong> {{ data.completed }} / {{ data.total }}
+                {% if data.current_item_name %} (Currently: {{ data.current_item_name }}) {% endif %}
+            </li>
             {% endfor %}
+        </ul>
+
+        {% if current_state.error_message %}
+        <div class="alert alert-danger">
+            <strong>Error:</strong> {{ current_state.error_message }}
+        </div>
+        {% endif %}
+
+        <h3>Log Entries (Latest First):</h3>
+        <pre class="log-output-static">
+            {% if current_state.logs %}
+                {% for entry in current_state.logs %}
+[{{ entry.timestamp }}] [{{ entry.type|upper }}] {{ entry.message }}
+                {% endfor %}
+            {% else %}
+                No log entries yet.
+            {% endif %}
         </pre>
     </div>
 </body>
