@@ -1,55 +1,151 @@
-/* Tailwind handles most things, this is for specifics */
+/* General Body & Container (Tailwind mostly handles this, but good for overrides) */
 body {
-    /* Using Tailwind's font-sans by default, can override here if needed */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    /* bg-gray-50 from Tailwind */
 }
 
-/* Lucide icons alignment and default size */
+/* Lucide icons base styling (ensure they pick up text color and size correctly) */
 [data-lucide] {
-    display: inline-block;
-    width: 1em; /* Default to font size */
+    display: inline-block; /* Important for alignment and sizing with text */
+    width: 1em; /* Default to current font size, can be overridden by Tailwind width/height classes */
     height: 1em;
-    vertical-align: -0.125em; /* Adjust for better alignment with text */
-    stroke-width: 2; /* Default Lucide stroke */
+    vertical-align: -0.15em; /* Fine-tune vertical alignment */
+    stroke-width: 2;
+    /* color: inherit; /* Inherit color from parent text */
 }
 
-/* Animation for pulsing status icon */
+/* Specific icon sizes if not set by Tailwind utilities directly on the <i> tag */
+.icon-sm i[data-lucide] { width: 0.875rem; height: 0.875rem; } /* 14px */
+.icon-md i[data-lucide] { width: 1.25rem; height: 1.25rem; } /* 20px */
+.icon-lg i[data-lucide] { width: 1.5rem; height: 1.5rem; }   /* 24px */
+
+
+/* Animation for the status indicator pulse (if using custom span) */
 .animate-pulse-icon {
-  animation: pulseIcon 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  display: inline-block;
+  border-radius: 50%;
+  animation: pulseIconEffect 1.75s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
-@keyframes pulseIcon {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
+@keyframes pulseIconEffect {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
 }
 
-/* Moving file animation elements */
+/* Moving file animation elements - from your example */
 .moving-file {
   position: absolute;
-  transition: left 0.15s linear; /* Speed of file movement */
+  transition: left 0.1s linear; /* Made transition a bit faster */
   transform: translate(-50%, -50%);
-  z-index: 10; 
-  padding: 2px; /* Smaller padding */
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 10; /* Ensure they are above the connection line but below modals */
+  padding: 3px; 
+  border-radius: 5px; /* Slightly more rounded */
+  /* background-color: rgba(255, 255, 255, 0.7); Add a slight background for visibility */
+  /* box-shadow: 0 1px 2px rgba(0,0,0,0.15); */
 }
-.moving-file i[data-lucide] { /* Ensure icon inside scales well */
-    width: 12px;
-    height: 12px;
-}
-
-/* Log panel specific styling */
-#logOutputContainer div {
-    padding-bottom: 2px; /* Tiny space between log lines */
-    word-break: break-all; /* Ensure long unbroken strings wrap */
-}
-#logOutputContainer .text-muted { /* Timestamp color */
-    color: #6c757d !important; /* More specific to override Tailwind dark mode if applicable */
+.moving-file i[data-lucide] {
+    width: 14px; /* Slightly larger moving file icon */
+    height: 14px;
 }
 
-/* Ensure progress bar text is visible */
-.progress-bar {
-    color: #fff;
-    text-align: center;
-    white-space: nowrap;
-    font-size: 0.7rem; /* Smaller font for progress text */
-    line-height: inherit;
+
+/* Log Panel Styling */
+#logOutputContainer { /* Applied to the div holding individual log lines */
+    /* Tailwind's h-64 gives 16rem max-height. Ensure overflow-y-auto is on this div */
+    /* The dark background and light text are set by Tailwind classes on the parent */
+}
+
+#logOutputContainer div { /* Individual log lines */
+    padding-bottom: 3px; 
+    word-break: break-all; 
+    line-height: 1.4; /* Slightly more spacing for log lines */
+}
+
+#logOutputContainer .text-muted, 
+#logOutputContainer .text-gray-500 { /* Timestamp color */
+    color: #9ca3af !important; /* Tailwind gray-400 - adjust if needed */
+    margin-right: 0.5em;
+}
+#logOutputContainer .text-gray-300 { color: #d1d5db !important; }
+#logOutputContainer .text-yellow-400 { color: #facc15 !important; } /* Tailwind yellow-400 */
+#logOutputContainer .text-red-400 { color: #f87171 !important; }   /* Tailwind red-400 */
+
+
+/* Progress Bar Text (if Tailwind doesn't make it clearly visible on all backgrounds) */
+/* Tailwind utility classes on the progress bar div itself are usually better for this. */
+/* For example: <div class="... flex items-center justify-center text-xs text-white"> */
+
+
+/* Styling for the stats items to match the desired look a bit more */
+.stat-item {
+    /* bg-gray-50 and shadow-sm are handled by Tailwind in JS */
+    /* border border-gray-200 also by Tailwind in JS */
+}
+
+.stat-item h3 { /* "Groups Migration", "Projects & Repositories" */
+    /* font-semibold text-gray-700 text-md by Tailwind */
+}
+
+.stat-item .progress { /* The outer div for the progress bar itself */
+    height: 0.625rem; /* Tailwind's h-2.5 */
+    background-color: #e5e7eb; /* Tailwind's bg-gray-200 or bg-gray-300 */
+    border-radius: 9999px; /* full */
+    overflow: hidden; /* Important for rounded corners on inner bar */
+}
+
+.stat-item .progress > div { /* The actual colored progress fill */
+    transition: width 0.3s ease-in-out; /* Smooth progress animation */
+    height: 100%;
+    border-radius: 9999px; /* full */
+}
+
+/* Ensure overall progress bar text is centered and visible */
+#overallProgressBar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Current Action Indicator specific styling if needed beyond Tailwind */
+#currentActionIndicator {
+    /* Tailwind classes handle most of this */
+}
+#currentActionIndicator i[data-lucide] {
+    width: 1rem; /* 16px */
+    height: 1rem;
+}
+
+/* Specific button styling if needed beyond Tailwind */
+#startMigrationButton {
+    /* Tailwind handles this */
+}
+#clearLogButton {
+    /* Tailwind handles this */
+}
+
+/* Ensure container for visualization allows absolute positioning of children */
+#migrationVisualization {
+    position: relative; /* This is key */
+}
+
+/* Connection line (if you want to draw one with CSS) */
+/* This is a simple example, a more complex one might use ::before/::after or an SVG */
+#migrationVisualization::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: calc(25% + 80px); /* Approximate start: from right edge of source server box */
+    right: calc(25% + 80px);/* Approximate end: to left edge of target server box */
+    height: 4px; /* Thickness of the line */
+    background-color: #cbd5e1; /* Tailwind's bg-gray-300 */
+    z-index: 1; /* Behind moving files */
+    transform: translateY(-50%);
 }
