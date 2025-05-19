@@ -1,61 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitLab Migration Dashboard</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        .progress-bar { transition: width 0.5s ease-in-out; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitLab Migration Control Panel</title>
+  <!-- Tailwind CSS via CDN -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+  <!-- Lucide Icons via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <div class="container mt-3 mb-3">
-        <div class="card">
-            <div class="card-header bg-dark text-white">
-                <h1 class="h3 mb-0">GitLab Migration Control Panel</h1>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Source:</strong> <span id="sourceUrl">{{ config.OLD_GITLAB_URL }}</span>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Target:</strong> <span id="targetUrl">{{ config.NEW_GITLAB_URL }}</span>
-                    </div>
-                </div>
-
-                <form id="migrationForm" class="mb-3">
-                    <button type="submit" id="startMigrationButton" class="btn btn-lg btn-success btn-block">
-                        Start Full Migration
-                    </button>
-                </form>
-                <a href="{{ url_for('migration_status_page_route') }}" class="btn btn-info btn-block mb-3">View Static Log Page</a>
-                
-                <hr>
-                <h4 class="mb-3">Live Progress:</h4>
-                <div class="mb-2">
-                    <strong>Overall Status:</strong> <span id="overallStatus" class="font-weight-bold">Idle</span>
-                </div>
-                <div class="mb-3">
-                    <strong>Current Action:</strong> <span id="currentActionText">Waiting to start...</span>
-                </div>
-
-                <!-- Stats -->
-                <div id="statsContainer">
-                    <!-- Stats will be dynamically inserted here by JS -->
-                </div>
-                
-                <h5 class="mt-4">Live Log (<span id="logCount">0</span> entries):</h5>
-                 <button id="clearLogButton" class="btn btn-sm btn-outline-warning float-right mb-1">Clear Client Log</button>
-                <div class="log-container">
-                    <pre id="liveLogOutput"></pre>
-                </div>
-                 <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
-            </div>
+<body class="flex flex-col h-screen bg-gray-100 text-gray-800 antialiased">
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 shadow-lg sticky top-0 z-50">
+    <div class="container mx-auto flex items-center justify-between">
+      <div class="flex items-center">
+        <i data-lucide="gitlab" class="w-8 h-8 mr-3"></i>
+        <h1 class="text-2xl font-semibold tracking-tight">GitLab Migration Dashboard</h1>
+      </div>
+      <div class="flex items-center space-x-4 text-sm">
+        <div>
+          <div class="flex items-center opacity-90">
+            <i data-lucide="server" class="mr-1.5 w-4 h-4"></i>
+            <span class="font-medium">Source:</span> 
+            <span class="ml-1 font-mono text-xs" id="configSourceUrl">{{ config.OLD_GITLAB_URL }}</span>
+          </div>
+          <div class="flex items-center opacity-90">
+            <i data-lucide="server" class="mr-1.5 w-4 h-4"></i>
+            <span class="font-medium">Target:</span> 
+            <span class="ml-1 font-mono text-xs" id="configTargetUrl">{{ config.NEW_GITLAB_URL }}</span>
+          </div>
         </div>
+      </div>
     </div>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </header>
+  
+  <!-- Main content -->
+  <div class="flex flex-1 overflow-hidden pt-2">
+    <!-- Left panel - Stats and controls -->
+    <aside class="w-80 bg-white p-5 shadow-xl flex flex-col border-r border-gray-200 overflow-y-auto">
+      <div class="mb-6">
+        <h2 class="text-xl font-semibold mb-3 text-gray-700">Migration Status</h2>
+        <div id="migrationStatusDisplay" class="p-4 rounded-lg text-center transition-all duration-300">
+          <span id="statusIconDisplay" class="inline-block mb-1"></span>
+          <span id="statusTextDisplay" class="block font-medium text-lg">Ready to Start</span>
+        </div>
+      </div>
+      
+      <div class="mb-6">
+        <h2 class="text-xl font-semibold mb-3 text-gray-700">Controls</h2>
+        <button
+          id="startMigrationButton"
+          class="w-full py-3 px-4 rounded-lg flex items-center justify-center text-base font-semibold transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2"
+        >
+          <i data-lucide="play" class="mr-2 w-5 h-5"></i>
+          <span id="migrationButtonText">Start Full Migration</span>
+        </button>
+      </div>
+      
+      <div class="flex-1">
+        <h2 class="text-xl font-semibold mb-3 text-gray-700">Progress Overview</h2>
+        <div class="space-y-4" id="statsContainer">
+          <!-- Stats will be dynamically inserted here by JS -->
+        </div>
+      </div>
+    </aside>
+    
+    <!-- Main panel - Migration visualization & Logs -->
+    <main class="flex-1 overflow-hidden flex flex-col p-5 space-y-5">
+      <!-- Current section info & Overall Progress -->
+      <div class="bg-white p-4 shadow-md rounded-lg border border-gray-200">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+          <div class="mb-3 sm:mb-0">
+            <h2 id="currentSectionTitle" class="text-xl font-semibold text-gray-700">Migration Dashboard</h2>
+            <p id="currentSectionDescription" class="text-sm text-gray-500 mt-1">
+              Monitor the GitLab data migration process.
+            </p>
+          </div>
+          
+          <div id="overallProgressContainer" class="w-full sm:w-1/2 lg:w-1/3 hidden">
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Overall Progress:</span>
+              <span id="overallProgressPercent" class="font-semibold text-gray-700">0%</span>
+            </div>
+            <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                id="overallProgressBar"
+                class="h-4 bg-purple-500 rounded-full transition-width duration-500 ease-in-out flex items-center justify-center text-xs text-white" 
+                style="width: 0%"
+              >0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Migration visualization -->
+      <div id="migrationVisualization" class="flex-1 relative overflow-hidden bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+        <div class="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-10">
+          <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 shadow-lg text-center transition-transform hover:scale-105">
+            <i data-lucide="server" class="text-blue-500 w-16 h-16 mx-auto"></i>
+            <div class="mt-2 text-sm font-semibold text-blue-700">Source GitLab</div>
+            <div class="text-xs text-gray-500 truncate" id="sourceIpDisplaySmall">{{ config.OLD_GITLAB_URL }}</div>
+          </div>
+        </div>
+        
+        <div class="absolute top-1/2 right-1/4 transform translate-x-1/2 -translate-y-1/2 z-10">
+          <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4 shadow-lg text-center transition-transform hover:scale-105">
+            <i data-lucide="server" class="text-green-500 w-16 h-16 mx-auto"></i>
+            <div class="mt-2 text-sm font-semibold text-green-700">Target GitLab</div>
+            <div class="text-xs text-gray-500 truncate" id="targetIpDisplaySmall">{{ config.NEW_GITLAB_URL }}</div>
+          </div>
+        </div>
+        
+        <div id="movingFilesContainer" class="absolute inset-0 w-full h-full pointer-events-none"></div>
+
+        <div id="currentActionIndicator" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white px-5 py-2.5 rounded-full shadow-xl border text-sm font-medium text-gray-700 hidden transition-opacity duration-300">
+          Initializing...
+        </div>
+        
+        <div id="completedStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-green-600 bg-opacity-80 z-20">
+          <div class="bg-white p-10 rounded-lg shadow-2xl text-center">
+            <i data-lucide="check-circle" class="text-green-500 w-20 h-20 mx-auto mb-5"></i>
+            <h3 class="font-bold text-3xl text-green-700 mb-2">Migration Complete!</h3>
+            <p class="text-gray-600">All selected data has been successfully transferred.</p>
+          </div>
+        </div>
+         <div id="errorStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-red-600 bg-opacity-80 z-20">
+          <div class="bg-white p-10 rounded-lg shadow-2xl text-center">
+            <i data-lucide="alert-triangle" class="text-red-500 w-20 h-20 mx-auto mb-5"></i>
+            <h3 class="font-bold text-3xl text-red-700 mb-2">Migration Error!</h3>
+            <p id="errorMessageText" class="text-gray-600">An error occurred. Please check logs.</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Log panel -->
+      <div class="bg-gray-800 text-gray-200 font-mono text-xs p-4 rounded-lg shadow-inner flex flex-col" style="height: 250px;">
+        <div class="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+            <h4 class="text-gray-400 font-semibold">Activity Log (<span id="logCount">0</span> entries)</h4>
+            <button id="clearLogButton" class="text-xs text-gray-400 hover:text-white hover:underline focus:outline-none">Clear Displayed Log</button>
+        </div>
+        <div id="logOutputContainer" class="flex-grow overflow-y-auto">
+            <div class="text-gray-500 italic">Migration logs will appear here...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

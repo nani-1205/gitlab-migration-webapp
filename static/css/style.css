@@ -1,75 +1,55 @@
+/* Tailwind handles most things, this is for specifics */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    padding-top: 1rem;
-    background-color: #eef2f7; /* Light cool gray background */
-    color: #333;
-    line-height: 1.6;
+    /* Using Tailwind's font-sans by default, can override here if needed */
 }
 
-.container {
-    max-width: 1000px; /* Wider for dashboard */
+/* Lucide icons alignment and default size */
+[data-lucide] {
+    display: inline-block;
+    width: 1em; /* Default to font size */
+    height: 1em;
+    vertical-align: -0.125em; /* Adjust for better alignment with text */
+    stroke-width: 2; /* Default Lucide stroke */
 }
 
-.card-header h1 {
-    font-size: 1.75rem; /* Slightly smaller h1 in card header */
-    margin-bottom: 0;
+/* Animation for pulsing status icon */
+.animate-pulse-icon {
+  animation: pulseIcon 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulseIcon {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
 }
 
-.config-details h5 {
-    color: #495057;
+/* Moving file animation elements */
+.moving-file {
+  position: absolute;
+  transition: left 0.15s linear; /* Speed of file movement */
+  transform: translate(-50%, -50%);
+  z-index: 10; 
+  padding: 2px; /* Smaller padding */
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.moving-file i[data-lucide] { /* Ensure icon inside scales well */
+    width: 12px;
+    height: 12px;
 }
 
-.log-container {
-    height: 350px; /* Adjusted height */
-    overflow-y: scroll;
-    border: 1px solid #ced4da; /* Standard bootstrap border color */
-    padding: 15px;
-    background-color: #282c34; /* Dark background for log */
-    color: #d1d5db; /* Lighter gray for log text */
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-    font-size: 0.875em; /* Slightly smaller mono font */
-    white-space: pre-wrap; 
-    word-wrap: break-word; 
-    border-radius: .25rem; /* Bootstrap border radius */
-    margin-top: 0.5rem;
+/* Log panel specific styling */
+#logOutputContainer div {
+    padding-bottom: 2px; /* Tiny space between log lines */
+    word-break: break-all; /* Ensure long unbroken strings wrap */
 }
-/* For static log page */
-.log-output-static {
-    max-height: 70vh;
-    overflow-y: auto;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    padding: 1rem;
-    font-family: monospace;
-    font-size: 0.9em;
-    white-space: pre-wrap;
-    word-break: break-all;
+#logOutputContainer .text-muted { /* Timestamp color */
+    color: #6c757d !important; /* More specific to override Tailwind dark mode if applicable */
 }
 
-
-.stat-item {
-    background-color: #f8f9fa; /* Light gray background for stat items */
-    padding: 0.75rem 1rem;
-    border-radius: .25rem;
-    margin-bottom: 0.75rem;
-    border: 1px solid #e9ecef;
-}
-
-.stat-item .progress {
-    height: 10px; /* Slimmer progress bar */
-    margin-top: 0.25rem;
-}
-
-.stat-item h6 {
-    margin-bottom: 0.25rem;
-    font-weight: 600;
-    color: #007bff
-}
-.stat-item p {
-    font-size: 0.9em;
-    margin-bottom: 0.1rem;
-    color: #6c757d;
-}
-.stat-item span.font-weight-bold {
-    color: #28a745; /* Green for completed counts */
+/* Ensure progress bar text is visible */
+.progress-bar {
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    font-size: 0.7rem; /* Smaller font for progress text */
+    line-height: inherit;
 }
