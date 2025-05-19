@@ -6,8 +6,8 @@
   <title>GitLab Migration Control Panel</title>
   <!-- Tailwind CSS via CDN -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
-  <!-- Lucide Icons via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.js"></script>
+  <!-- Lucide Icons via UNPKG CDN (recommended for latest) -->
+  <script src="https://unpkg.com/lucide@latest/dist/lucide.min.js"></script>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -37,12 +37,12 @@
   </header>
   
   <!-- Main content -->
-  <div class="flex flex-1 overflow-hidden pt-2">
+  <div class="flex flex-1 overflow-hidden pt-2"> <!-- Added pt-2 for a little space below sticky header -->
     <!-- Left panel - Stats and controls -->
     <aside class="w-80 bg-white p-5 shadow-xl flex flex-col border-r border-gray-200 overflow-y-auto">
       <div class="mb-6">
         <h2 class="text-xl font-semibold mb-3 text-gray-700">Migration Status</h2>
-        <div id="migrationStatusDisplay" class="p-4 rounded-lg text-center transition-all duration-300">
+        <div id="migrationStatusDisplay" class="p-4 rounded-lg text-center transition-all duration-300 bg-gray-100 text-gray-800">
           <span id="statusIconDisplay" class="inline-block mb-1">
             <i data-lucide="info" class="inline-block w-6 h-6"></i> <!-- Initial Icon -->
           </span>
@@ -64,8 +64,7 @@
       <div class="flex-1">
         <h2 class="text-xl font-semibold mb-3 text-gray-700">Progress Overview</h2>
         <div class="space-y-4" id="statsContainer">
-          <!-- Stats will be dynamically inserted here by JS -->
-           <div class="text-gray-500 text-sm p-3">Stats will appear here once migration starts...</div>
+          <div class="text-gray-500 text-sm p-3">Stats will appear here once migration starts...</div>
         </div>
       </div>
     </aside>
@@ -126,7 +125,7 @@
           <div class="bg-white p-10 rounded-lg shadow-2xl text-center">
             <i data-lucide="check-circle" class="text-green-500 w-20 h-20 mx-auto mb-5"></i>
             <h3 class="font-bold text-3xl text-green-700 mb-2">Migration Complete!</h3>
-            <p class="text-gray-600">All selected data has been transferred.</p>
+            <p class="text-gray-600">All selected data has been successfully transferred.</p>
           </div>
         </div>
          <div id="errorStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-red-600 bg-opacity-80 z-20">
@@ -151,6 +150,7 @@
     </main>
   </div>
 
+  <!-- Custom JS - Placed at the end of body -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
