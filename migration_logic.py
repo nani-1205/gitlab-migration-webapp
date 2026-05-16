@@ -253,6 +253,10 @@ def migrate_project_repo_py(
 
     if not new_project: _log_and_update_state(f"ERROR: new_project is None for old project '{project_name_old}'. Cannot proceed.", log_type="error"); return False
 
+    if new_project.attributes.get('empty_repo') is False:
+        _log_and_update_state(f"Repository '{new_project.name}' already contains data on target. Skipping clone and push.", action=f"Skipped: {project_name_old} (already migrated)")
+        return True
+
     new_repo_url = f"ssh://git@{NEW_GITLAB_SSH_HOST}:{NEW_GITLAB_SSH_PORT}/{new_project.path_with_namespace}.git"
     _log_and_update_state(f"Old Repo URL for clone (final): {old_repo_url}", action=f"Cloning: {project_name_old}")
     _log_and_update_state(f"New Repo URL for push (final): {new_repo_url}")
@@ -263,10 +267,10 @@ def migrate_project_repo_py(
     if clone_proc.returncode != 0:
         if "empty repository" in clone_proc.stderr.lower(): _log_and_update_state(f"INFO: Old project '{project_namespace_path_old}' is empty. Skipping push."); shutil.rmtree(temp_repo_path, ignore_errors=True); return True 
         _log_and_update_state(f"ERROR: Failed to clone '{old_repo_url}'. Stderr: {clone_proc.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
-    _log_and_update_state(f"Pushing (mirror) from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
+    _log_and_update_state(f"Pushing branches and tags from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
     try:
         subprocess.run(['git', '--git-dir', temp_repo_path, 'remote', 'add', 'aws-target', new_repo_url], check=True, capture_output=True, text=True)
-        push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--mirror', 'aws-target'], capture_output=True, text=True, check=False)
+        push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--force', 'aws-target', 'refs/heads/*:refs/heads/*', 'refs/tags/*:refs/tags/*'], capture_output=True, text=True, check=False)
     except subprocess.CalledProcessError as e_remote: _log_and_update_state(f"ERROR adding remote for '{new_repo_url}'. Stderr: {e_remote.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
     finally: shutil.rmtree(temp_repo_path, ignore_errors=True)
     if push_proc.returncode != 0:
@@ -276,12 +280,54 @@ def migrate_project_repo_py(
     _log_and_update_state(f"Successfully migrated Git data for '{project_namespace_path_old}'.")
     return True
 
+def migrate_users_py():
+    _log_and_update_state("=== PHASE 0: Migrating Users ===", action="Starting user migration")
+    with state_lock: current_migration_state["status"] = "migrating_users"
+    if not gl_old or not gl_new: return
+    
+    try:
+        old_users = gl_old.users.list(all=True)
+        with state_lock: current_migration_state["stats"]["users"] = {"total": len(old_users), "completed": 0, "current_item_name": ""}
+        _log_and_update_state(f"Found {len(old_users)} users in old GitLab.")
+        
+        new_users = gl_new.users.list(all=True)
+        new_user_emails = {u.email for u in new_users if getattr(u, 'email', None)}
+        new_user_usernames = {u.username for u in new_users}
+        
+        for u in old_users:
+            if u.username == 'root': 
+                with state_lock: current_migration_state["stats"]["users"]["completed"] += 1
+                continue # skip root
+            if u.username in new_user_usernames or (getattr(u, 'email', None) and u.email in new_user_emails):
+                _log_and_update_state(f"User {u.username} already exists in new GitLab. Skipping.", section="users", item_name=u.username, increment_completed=True)
+                continue
+                
+            _log_and_update_state(f"Creating user {u.username}...", action=f"Creating user {u.username}", section="users", item_name=u.username)
+            
+            payload = {
+                'email': getattr(u, 'email', f"{u.username}@example.com"), # Fallback if email is hidden
+                'username': u.username,
+                'name': u.name,
+                'password': 'Password123!', # Temporary password
+                'skip_confirmation': True
+            }
+            try:
+                gl_new.users.create(payload)
+                _log_and_update_state(f"Created user {u.username} successfully.", section="users", item_name=u.username, increment_completed=True)
+            except Exception as e:
+                _log_and_update_state(f"Failed to create user {u.username}: {e}", log_type="error", section="users", item_name=u.username, increment_completed=True)
+                
+    except Exception as e:
+        _log_and_update_state(f"Error migrating users: {e}", log_type="error")
+    
+    _log_and_update_state("=== FINISHED PHASE 0: User Migration ===", action="User migration complete")
+
 def run_full_migration():
     global migration_status_log, OLD_TO_NEW_GROUP_ID_MAP, CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE, current_migration_state
     with state_lock:
         current_migration_state["status"] = "initializing"; current_migration_state["logs"] = []
         current_migration_state["error_message"] = None
-        current_migration_state["stats"] = {"groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": ""}}
+        current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": ""}}
     OLD_TO_NEW_GROUP_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
     try: initialize_gitlab_clients()
     except Exception as e: _log_and_update_state(f"Halting: client init failure: {e}", log_type="error", error_msg=str(e), set_status="error"); return
@@ -301,6 +347,9 @@ def run_full_migration():
         with state_lock: current_migration_state["stats"]["projects"]["total"] = project_total_count
         _log_and_update_state(f"Estimated total projects: {project_total_count}")
     except Exception as e: _log_and_update_state(f"Warning: Could not estimate total projects: {e}", log_type="warning")
+
+    with state_lock: current_migration_state["status"] = "migrating_users"
+    migrate_users_py()
 
     with state_lock: current_migration_state["status"] = "migrating_groups"
     _log_and_update_state("=== PHASE 1: Migrating Group Hierarchy ===", action="Starting group migration")

@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const getStatusUrl = "/get-status";
 
     const statConfig = {
+        users: { icon: "user", color: "green", label: "Users Migration" },
         groups: { icon: "users", color: "blue", label: "Groups Migration" },
         projects: { icon: "package", color: "purple", label: "Projects & Repositories" }, // Changed icon
     };
@@ -150,18 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let overallProgress = 0;
         let showOverallProgress = false;
-        if (statusData.stats && (statusData.status === "migrating_groups" || statusData.status === "migrating_projects")) {
+        if (statusData.stats && (statusData.status === "migrating_users" || statusData.status === "migrating_groups" || statusData.status === "migrating_projects")) {
             showOverallProgress = true;
-            const { groups, projects } = statusData.stats;
-            const totalGroups = Math.max(1, groups.total || 1); // Avoid division by zero, assume at least 1 if unknown
-            const completedGroups = groups.completed || 0;
-            const totalProjects = Math.max(1, projects.total || 1);
-            const completedProjects = projects.completed || 0;
+            const { users, groups, projects } = statusData.stats;
+            const totalUsers = Math.max(1, users?.total || 1);
+            const completedUsers = users?.completed || 0;
+            const totalGroups = Math.max(1, groups?.total || 1);
+            const completedGroups = groups?.completed || 0;
+            const totalProjects = Math.max(1, projects?.total || 1);
+            const completedProjects = projects?.completed || 0;
 
-            if (statusData.status === "migrating_groups") {
-                overallProgress = Math.round((completedGroups / totalGroups) * 50);
+            if (statusData.status === "migrating_users") {
+                overallProgress = Math.round((completedUsers / totalUsers) * 10);
+            } else if (statusData.status === "migrating_groups") {
+                overallProgress = 10 + Math.round((completedGroups / totalGroups) * 20);
             } else if (statusData.status === "migrating_projects") {
-                overallProgress = 50 + Math.round((completedProjects / totalProjects) * 50);
+                overallProgress = 30 + Math.round((completedProjects / totalProjects) * 70);
             }
             overallProgress = Math.min(100, Math.max(0, overallProgress)); // Clamp between 0-100
         } else if (statusData.status === "completed") {
@@ -186,7 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (currentActionIndicator) {
             let indicatorText = ""; let indicatorIcon = "loader-2"; let indicatorColor = "text-gray-700";
-            if (statusData.status === "migrating_groups" && statusData.stats?.groups) {
+            if (statusData.status === "migrating_users" && statusData.stats?.users) {
+                indicatorText = `User: ${statusData.stats.users.current_item_name || 'Scanning...'}`; indicatorIcon = "user"; indicatorColor = "text-green-600";
+            } else if (statusData.status === "migrating_groups" && statusData.stats?.groups) {
                 indicatorText = `Group: ${statusData.stats.groups.current_item_name || 'Scanning...'}`; indicatorIcon = "users"; indicatorColor = "text-blue-600";
             } else if (statusData.status === "migrating_projects" && statusData.stats?.projects) {
                 indicatorText = `Project: ${statusData.stats.projects.current_item_name || 'Scanning...'}`; indicatorIcon = "package"; indicatorColor = "text-purple-600";
@@ -310,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 const isCurrentlyMigrating = data.status === "running" || 
                                             data.status === "initializing" || 
+                                            data.status === "migrating_users" || 
                                             data.status === "migrating_groups" || 
                                             data.status === "migrating_projects";
                 
@@ -348,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(data => {
                     const isInitiallyMigrating = data.status === "running" || 
                                                data.status === "initializing" ||
+                                               data.status === "migrating_users" ||
                                                data.status === "migrating_groups" ||
                                                data.status === "migrating_projects";
                     if (isInitiallyMigrating) {

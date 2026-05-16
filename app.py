@@ -44,6 +44,7 @@ def start_migration_route():
         migration_logic.current_migration_state["logs"] = []
         migration_logic.current_migration_state["error_message"] = None
         migration_logic.current_migration_state["stats"] = {
+            "users": {"total": 0, "completed": 0, "current_item_name": ""},
             "groups": {"total": 0, "completed": 0, "current_item_name": ""},
             "projects": {"total": 0, "completed": 0, "current_item_name": ""},
         }
