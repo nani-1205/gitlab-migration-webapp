@@ -23,7 +23,7 @@ def index():
     }
     with migration_logic.state_lock:
         current_status = migration_logic.current_migration_state["status"]
-        initial_is_migrating = current_status in ["initializing", "migrating_groups", "migrating_projects"]
+        initial_is_migrating = current_status in ["initializing", "migrating_users", "migrating_groups", "migrating_projects"]
     return render_template('index.html', config=config_display, is_migrating_initial=initial_is_migrating)
 
 
