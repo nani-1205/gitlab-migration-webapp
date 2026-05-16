@@ -138,30 +138,59 @@ def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=N
         return None
     except Exception as e_unexp: _log_and_update_state(f"UNEXPECTED ERROR creating group '{name}': {e_unexp}", log_type="error"); return None
 
-def ensure_group_mapped(old_group_id, initial_new_parent_id=None):
-    if old_group_id in OLD_TO_NEW_GROUP_ID_MAP:
+def ensure_group_mapped_by_path(old_namespace_info, initial_new_parent_id=None):
+    old_group_id = old_namespace_info.get('id')
+    if old_group_id and old_group_id in OLD_TO_NEW_GROUP_ID_MAP:
         return OLD_TO_NEW_GROUP_ID_MAP[old_group_id]
         
-    try:
-        old_group = get_full_group_object(gl_old, old_group_id, "dynamic map")
-        if not old_group: return None
-    except Exception as e:
-        _log_and_update_state(f"Failed to fetch missing old group ID {old_group_id}: {e}")
+    full_path = old_namespace_info.get('full_path')
+    if not full_path:
+        _log_and_update_state(f"Missing full_path in namespace info: {old_namespace_info}", log_type="error")
         return None
         
-    new_parent_id = initial_new_parent_id
-    if old_group.parent_id:
-        new_parent_id = ensure_group_mapped(old_group.parent_id, initial_new_parent_id)
-        if not new_parent_id:
-            _log_and_update_state(f"Failed to map parent group {old_group.parent_id} for {old_group.name}")
-            return None
-            
-    _log_and_update_state(f"Dynamically mapping missing group: {old_group.full_path}")
-    new_group = create_or_find_group_on_new(old_group, new_parent_id)
-    if new_group:
-        OLD_TO_NEW_GROUP_ID_MAP[old_group_id] = new_group.id
-        return new_group.id
-    return None
+    path_parts = full_path.split('/')
+    current_parent_id = initial_new_parent_id
+    
+    for i, part in enumerate(path_parts):
+        found_group = None
+        if current_parent_id:
+            try:
+                parent_group_new = gl_new.groups.get(current_parent_id)
+                all_subgroups = parent_group_new.subgroups.list(search=part, all=True)
+                for sg in all_subgroups:
+                    if sg.path == part:
+                        found_group = gl_new.groups.get(sg.id)
+                        break
+            except Exception as e:
+                _log_and_update_state(f"Error searching subgroup '{part}': {e}", log_type="warning")
+        else:
+            try:
+                all_groups = gl_new.groups.list(search=part, top_level_only=True, all=True)
+                for g in all_groups:
+                    if g.path == part:
+                        found_group = gl_new.groups.get(g.id)
+                        break
+            except Exception as e:
+                _log_and_update_state(f"Error searching top-level group '{part}': {e}", log_type="warning")
+                
+        if found_group:
+            current_parent_id = found_group.id
+        else:
+            payload = {'name': part, 'path': part, 'visibility': 'private'}
+            if current_parent_id: payload['parent_id'] = current_parent_id
+                
+            try:
+                _log_and_update_state(f"Dynamically creating missing group '{part}' (from path '{full_path}')")
+                new_group = gl_new.groups.create(payload)
+                current_parent_id = new_group.id
+            except Exception as e:
+                _log_and_update_state(f"Failed to create group '{part}': {e}", log_type="error")
+                return None
+                
+    if old_group_id and current_parent_id:
+        OLD_TO_NEW_GROUP_ID_MAP[old_group_id] = current_parent_id
+        
+    return current_parent_id
 
 def migrate_groups_recursive_py(old_parent_group_id_for_subgroup_listing=None, new_parent_id_for_creation=None):
     if not gl_old or not gl_new: return
@@ -421,9 +450,9 @@ def run_full_migration():
                 if old_namespace_id in OLD_TO_NEW_GROUP_ID_MAP: 
                     new_target_namespace_id = OLD_TO_NEW_GROUP_ID_MAP[old_namespace_id]
                 else:
-                    _log_and_update_state(f"Group map missing for old group ID {old_namespace_id}. Attempting dynamic mapping...", log_type="warning")
+                    _log_and_update_state(f"Group map missing for old group ID {old_namespace_id}. Attempting dynamic mapping by path...", log_type="warning")
                     initial_new_parent_id = TARGET_PARENT_GROUP_ID_ON_NEW_FOR_ALL if TARGET_PARENT_GROUP_ID_ON_NEW_FOR_ALL else None
-                    new_target_namespace_id = ensure_group_mapped(old_namespace_id, initial_new_parent_id)
+                    new_target_namespace_id = ensure_group_mapped_by_path(namespace_info, initial_new_parent_id)
                     
                     if not new_target_namespace_id:
                         _log_and_update_state(f"ERROR: Could not dynamically map group ID {old_namespace_id} (project: {project_namespace_path_old}). Skipping.", log_type="error")
