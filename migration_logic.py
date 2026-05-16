@@ -328,7 +328,7 @@ def migrate_project_repo_py(
     except subprocess.CalledProcessError as e_remote: _log_and_update_state(f"ERROR adding remote for '{new_repo_url}'. Stderr: {e_remote.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
     finally: shutil.rmtree(temp_repo_path, ignore_errors=True)
     if push_proc.returncode != 0:
-        if "deny updating a hidden ref" in push_proc.stderr or "rpc error: code = Canceled" in push_proc.stderr or "No refs in common" in push_proc.stdout.strip() or "remote end hung up unexpectedly" in push_proc.stderr:
+        if "deny updating a hidden ref" in push_proc.stderr or "rpc error: code = Canceled" in push_proc.stderr or "No refs in common" in push_proc.stderr or "remote end hung up unexpectedly" in push_proc.stderr:
             _log_and_update_state(f"Push to '{new_repo_url}' non-critical messages or empty. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="warning"); return True 
         _log_and_update_state(f"ERROR: Failed to push to '{new_repo_url}'. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="error"); return False
     _log_and_update_state(f"Successfully migrated Git data for '{project_namespace_path_old}'.")
