@@ -138,6 +138,31 @@ def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=N
         return None
     except Exception as e_unexp: _log_and_update_state(f"UNEXPECTED ERROR creating group '{name}': {e_unexp}", log_type="error"); return None
 
+def ensure_group_mapped(old_group_id, initial_new_parent_id=None):
+    if old_group_id in OLD_TO_NEW_GROUP_ID_MAP:
+        return OLD_TO_NEW_GROUP_ID_MAP[old_group_id]
+        
+    try:
+        old_group = get_full_group_object(gl_old, old_group_id, "dynamic map")
+        if not old_group: return None
+    except Exception as e:
+        _log_and_update_state(f"Failed to fetch missing old group ID {old_group_id}: {e}")
+        return None
+        
+    new_parent_id = initial_new_parent_id
+    if old_group.parent_id:
+        new_parent_id = ensure_group_mapped(old_group.parent_id, initial_new_parent_id)
+        if not new_parent_id:
+            _log_and_update_state(f"Failed to map parent group {old_group.parent_id} for {old_group.name}")
+            return None
+            
+    _log_and_update_state(f"Dynamically mapping missing group: {old_group.full_path}")
+    new_group = create_or_find_group_on_new(old_group, new_parent_id)
+    if new_group:
+        OLD_TO_NEW_GROUP_ID_MAP[old_group_id] = new_group.id
+        return new_group.id
+    return None
+
 def migrate_groups_recursive_py(old_parent_group_id_for_subgroup_listing=None, new_parent_id_for_creation=None):
     if not gl_old or not gl_new: return
     page = 1; per_page = 100
@@ -393,8 +418,17 @@ def run_full_migration():
             old_namespace_id = namespace_info.get('id'); old_namespace_kind = namespace_info.get('kind')
             new_target_namespace_id = None
             if old_namespace_kind == 'group':
-                if old_namespace_id in OLD_TO_NEW_GROUP_ID_MAP: new_target_namespace_id = OLD_TO_NEW_GROUP_ID_MAP[old_namespace_id]
-                else: _log_and_update_state(f"WARNING: No group map for old group ID {old_namespace_id} (project: {project_namespace_path_old}). Skipping.", log_type="warning"); projects_failed_processing_count += 1; continue
+                if old_namespace_id in OLD_TO_NEW_GROUP_ID_MAP: 
+                    new_target_namespace_id = OLD_TO_NEW_GROUP_ID_MAP[old_namespace_id]
+                else:
+                    _log_and_update_state(f"Group map missing for old group ID {old_namespace_id}. Attempting dynamic mapping...", log_type="warning")
+                    initial_new_parent_id = TARGET_PARENT_GROUP_ID_ON_NEW_FOR_ALL if TARGET_PARENT_GROUP_ID_ON_NEW_FOR_ALL else None
+                    new_target_namespace_id = ensure_group_mapped(old_namespace_id, initial_new_parent_id)
+                    
+                    if not new_target_namespace_id:
+                        _log_and_update_state(f"ERROR: Could not dynamically map group ID {old_namespace_id} (project: {project_namespace_path_old}). Skipping.", log_type="error")
+                        projects_failed_processing_count += 1
+                        continue
             elif old_namespace_kind == 'user': _log_and_update_state(f"Project '{project_name_old}' is user project. Will create under token owner.")
             else: _log_and_update_state(f"Unknown namespace kind '{old_namespace_kind}' for '{project_name_old}'. Skipping.", log_type="warning"); projects_failed_processing_count +=1; continue
             
