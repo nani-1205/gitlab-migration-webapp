@@ -247,11 +247,9 @@ def migrate_project_repo_py(
                           action=f"Processing Project: {project_name_old}",
                           section="projects", item_name=project_namespace_path_old)
 
-    if not old_repo_ssh_url_from_stub:
-        _log_and_update_state(f"CRITICAL ERROR: ssh_url_to_repo from stub is missing for project {project_namespace_path_old} (ID: {project_id_old}). Cannot clone. Skipping.", log_type="error")
-        return False
-    
-    old_repo_url = f"ssh://git@{OLD_GITLAB_SSH_HOST}:{OLD_GITLAB_SSH_PORT}/{project_namespace_path_old}.git"
+    # Use HTTP URL with token for cloning instead of SSH
+    old_scheme, old_domain = OLD_GITLAB_URL.split('://', 1)
+    old_repo_url = f"{old_scheme}://oauth2:{OLD_GITLAB_TOKEN}@{old_domain.rstrip('/')}/{project_namespace_path_old}.git"
 
     project_payload = {
         'name': project_name_old, 'path': project_path_old,
@@ -311,12 +309,19 @@ def migrate_project_repo_py(
         _log_and_update_state(f"Repository '{new_project.name}' already contains data on target. Skipping clone and push.", action=f"Skipped: {project_name_old} (already migrated)")
         return True
 
-    new_repo_url = f"ssh://git@{NEW_GITLAB_SSH_HOST}:{NEW_GITLAB_SSH_PORT}/{new_project.path_with_namespace}.git"
-    _log_and_update_state(f"Old Repo URL for clone (final): {old_repo_url}", action=f"Cloning: {project_name_old}")
-    _log_and_update_state(f"New Repo URL for push (final): {new_repo_url}")
+    # Use HTTP URL with token for pushing instead of SSH
+    new_scheme, new_domain = NEW_GITLAB_URL.split('://', 1)
+    new_repo_url = f"{new_scheme}://oauth2:{NEW_GITLAB_TOKEN}@{new_domain.rstrip('/')}/{new_project.path_with_namespace}.git"
+    
+    # Hide tokens in logs
+    old_repo_url_log = f"{old_scheme}://oauth2:***@{old_domain.rstrip('/')}/{project_namespace_path_old}.git"
+    new_repo_url_log = f"{new_scheme}://oauth2:***@{new_domain.rstrip('/')}/{new_project.path_with_namespace}.git"
+
+    _log_and_update_state(f"Old Repo URL for clone (final): {old_repo_url_log}", action=f"Cloning: {project_name_old}")
+    _log_and_update_state(f"New Repo URL for push (final): {new_repo_url_log}")
     safe_path_old = project_path_old.replace('/', '_'); temp_repo_path = os.path.join(MIGRATION_TEMP_DIR, f"{safe_path_old}_{project_id_old}_{int(time.time() * 1000)}.git")
     if os.path.exists(temp_repo_path): shutil.rmtree(temp_repo_path)
-    _log_and_update_state(f"Cloning (mirror) '{old_repo_url}' to '{temp_repo_path}'...")
+    _log_and_update_state(f"Cloning (mirror) '{old_repo_url_log}' to '{temp_repo_path}'...")
     clone_proc = subprocess.run(['git', 'clone', '--mirror', old_repo_url, temp_repo_path], capture_output=True, text=True, check=False)
     if clone_proc.returncode != 0:
         if "empty repository" in clone_proc.stderr.lower(): _log_and_update_state(f"INFO: Old project '{project_namespace_path_old}' is empty. Skipping push."); shutil.rmtree(temp_repo_path, ignore_errors=True); return True 
@@ -325,12 +330,12 @@ def migrate_project_repo_py(
     try:
         subprocess.run(['git', '--git-dir', temp_repo_path, 'remote', 'add', 'aws-target', new_repo_url], check=True, capture_output=True, text=True)
         push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--force', 'aws-target', 'refs/heads/*:refs/heads/*', 'refs/tags/*:refs/tags/*'], capture_output=True, text=True, check=False)
-    except subprocess.CalledProcessError as e_remote: _log_and_update_state(f"ERROR adding remote for '{new_repo_url}'. Stderr: {e_remote.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
+    except subprocess.CalledProcessError as e_remote: _log_and_update_state(f"ERROR adding remote for '{new_repo_url_log}'. Stderr: {e_remote.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
     finally: shutil.rmtree(temp_repo_path, ignore_errors=True)
     if push_proc.returncode != 0:
         if "deny updating a hidden ref" in push_proc.stderr or "rpc error: code = Canceled" in push_proc.stderr or "No refs in common" in push_proc.stderr or "remote end hung up unexpectedly" in push_proc.stderr:
-            _log_and_update_state(f"Push to '{new_repo_url}' non-critical messages or empty. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="warning"); return True 
-        _log_and_update_state(f"ERROR: Failed to push to '{new_repo_url}'. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="error"); return False
+            _log_and_update_state(f"Push to '{new_repo_url_log}' non-critical messages or empty. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="warning"); return True 
+        _log_and_update_state(f"ERROR: Failed to push to '{new_repo_url_log}'. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="error"); return False
     _log_and_update_state(f"Successfully migrated Git data for '{project_namespace_path_old}'.")
     return True
 
