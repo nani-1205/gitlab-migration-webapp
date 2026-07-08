@@ -28,22 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const movingFilesContainer = document.getElementById('movingFilesContainer');
 
     // --- State & Configuration ---
-    let pollingInterval;
+    let pollingInterval = null;
     const pollingTime = 3000; 
-    let movingFileIdCounter = 0;
-    const MAX_MOVING_FILES = 15;
-    let activeMovingFiles = [];
+    let animationIntervalId = null;
+    let currentMigrationStatus = "idle";
+    let lastActiveItemName = "";
 
     const startMigrationUrl = "/start-migration"; 
     const getStatusUrl = "/get-status";
 
     const statConfig = {
-        users: { icon: "user", color: "green", label: "Users Migration" },
-        groups: { icon: "users", color: "blue", label: "Groups Migration" },
-        projects: { icon: "package", color: "purple", label: "Projects & Repositories" }, // Changed icon
+        users: { icon: "user", colorClass: "text-emerald-400", bgClass: "bg-emerald-500", label: "Users Migration" },
+        groups: { icon: "folder-git-2", colorClass: "text-indigo-400", bgClass: "bg-indigo-500", label: "Groups Migration" },
+        projects: { icon: "git-branch", colorClass: "text-purple-400", bgClass: "bg-purple-500", label: "Projects & Repositories" },
     };
-    const fileVisualIcons = ['file-text', 'git-commit', 'git-branch', 'folder-git-2', 'package-search'];
-
 
     // --- Event Listeners ---
     if (startMigrationButton) {
@@ -51,8 +49,92 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (clearLogButton) {
         clearLogButton.addEventListener('click', () => {
-            if (logOutputContainer) logOutputContainer.innerHTML = '<div class="text-gray-500 italic">[Client-side log display cleared]</div>';
+            if (logOutputContainer) logOutputContainer.innerHTML = '<div class="text-gray-600 italic">[Terminal buffer cleared]</div>';
             if (logCountElement) logCountElement.textContent = '0';
+        });
+    }
+
+    // --- Animation Handling ---
+    function startAnimationLoop() {
+        if (animationIntervalId) return;
+        console.log("Starting transfer animation loop.");
+        animationIntervalId = setInterval(createAndAnimateFile, 250); // Spawn particle every 250ms
+    }
+
+    function stopAnimationLoop() {
+        if (animationIntervalId) {
+            console.log("Stopping transfer animation loop.");
+            clearInterval(animationIntervalId);
+            animationIntervalId = null;
+        }
+        if (movingFilesContainer) {
+            movingFilesContainer.innerHTML = ''; 
+        }
+    }
+
+    function createAndAnimateFile() {
+        if (!movingFilesContainer) return;
+
+        // Limit the total active elements to prevent performance degradation
+        if (movingFilesContainer.children.length >= 25) return;
+
+        const fileEl = document.createElement('div');
+        fileEl.className = 'moving-file';
+
+        // Select icons & glows based on active phase
+        let iconType = 'file-text';
+        let iconColorClass = 'text-indigo-400';
+        let glowColor = 'rgba(99, 102, 241, 0.4)';
+
+        if (currentMigrationStatus === 'migrating_users') {
+            const userIcons = ['user', 'users'];
+            iconType = userIcons[Math.floor(Math.random() * userIcons.length)];
+            iconColorClass = 'text-emerald-400';
+            glowColor = 'rgba(16, 185, 129, 0.4)';
+        } else if (currentMigrationStatus === 'migrating_groups') {
+            const groupIcons = ['folder', 'folder-git-2', 'git-branch'];
+            iconType = groupIcons[Math.floor(Math.random() * groupIcons.length)];
+            iconColorClass = 'text-indigo-400';
+            glowColor = 'rgba(99, 102, 241, 0.4)';
+        } else if (currentMigrationStatus === 'migrating_projects') {
+            const projIcons = ['package', 'git-commit', 'git-pull-request', 'terminal'];
+            iconType = projIcons[Math.floor(Math.random() * projIcons.length)];
+            iconColorClass = 'text-purple-400';
+            glowColor = 'rgba(168, 85, 247, 0.4)';
+        } else {
+            // Default random git icons
+            const defaultIcons = ['file-text', 'git-commit', 'git-branch', 'package'];
+            iconType = defaultIcons[Math.floor(Math.random() * defaultIcons.length)];
+            iconColorClass = 'text-gray-400';
+            glowColor = 'rgba(148, 163, 184, 0.3)';
+        }
+
+        let labelHtml = "";
+        if (lastActiveItemName) {
+            let displayName = lastActiveItemName;
+            if (displayName.length > 20) {
+                displayName = "..." + displayName.slice(-17);
+            }
+            labelHtml = `<span class="moving-file-label font-sans text-[9px] text-gray-200 ml-1.5 bg-slate-950 bg-opacity-70 px-1.5 py-0.5 rounded border border-gray-800 shadow-inner">${displayName}</span>`;
+            fileEl.classList.add('has-label');
+            fileEl.innerHTML = `<i data-lucide="${iconType}" class="${iconColorClass}"></i>${labelHtml}`;
+        } else {
+            fileEl.innerHTML = `<i data-lucide="${iconType}" class="${iconColorClass}"></i>`;
+        }
+        fileEl.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.5), 0 0 8px ${glowColor}`;
+
+        const startY = Math.random() * 50 + 25; // Random height between 25% and 75%
+        fileEl.style.top = `${startY}%`;
+        
+        movingFilesContainer.appendChild(fileEl);
+        
+        if (window.lucide) {
+            window.lucide.createIcons({ elements: [fileEl.querySelector('i')] });
+        }
+
+        // Clean up element once animation ends
+        fileEl.addEventListener('animationend', () => {
+            fileEl.remove();
         });
     }
 
@@ -66,6 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
         errorStatusDisplay.classList.add('hidden');
         if(errorMessageText) errorMessageText.textContent = "";
 
+        currentMigrationStatus = 'initializing';
+        startAnimationLoop(); // Instantly start animation for interactive responsiveness
 
         fetch(startMigrationUrl, { method: 'POST' })
             .then(response => {
@@ -79,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         pollingInterval = setInterval(fetchAndUpdateStatus, pollingTime);
                     }
                 } else {
+                    stopAnimationLoop();
                     updateButtonState(false, 'Start Failed - Retry?');
                     updateMainStatusDisplay({ status: 'error', current_action: data.message || 'Failed to start migration on server' });
                     if(errorMessageText) errorMessageText.textContent = data.message || 'Failed to start migration on server';
@@ -87,10 +172,11 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => {
                 console.error('Error starting migration:', error);
+                stopAnimationLoop();
                 updateButtonState(false, 'Start Failed - Retry?');
                 updateMainStatusDisplay({ status: 'error', current_action: 'Error communicating with server.' });
-                 if(errorMessageText) errorMessageText.textContent = error.message || 'Communication error.';
-                 errorStatusDisplay.classList.remove('hidden');
+                if(errorMessageText) errorMessageText.textContent = error.message || 'Communication error.';
+                errorStatusDisplay.classList.remove('hidden');
             });
     }
 
@@ -102,42 +188,54 @@ document.addEventListener('DOMContentLoaded', () => {
         const iconEl = startMigrationButton.querySelector('i[data-lucide]');
         if (iconEl) iconEl.setAttribute('data-lucide', isMigrating ? 'pause-circle' : 'play-circle');
         
-        startMigrationButton.classList.toggle('bg-green-500', !isMigrating);
-        startMigrationButton.classList.toggle('hover:bg-green-600', !isMigrating);
-        startMigrationButton.classList.toggle('text-white', !isMigrating);
-        startMigrationButton.classList.toggle('bg-gray-400', isMigrating);
-        startMigrationButton.classList.toggle('text-gray-700', isMigrating);
+        startMigrationButton.classList.toggle('from-emerald-500', !isMigrating);
+        startMigrationButton.classList.toggle('to-green-600', !isMigrating);
+        startMigrationButton.classList.toggle('hover:from-emerald-400', !isMigrating);
+        startMigrationButton.classList.toggle('hover:to-green-500', !isMigrating);
+        startMigrationButton.classList.toggle('cursor-pointer', !isMigrating);
+        
+        startMigrationButton.classList.toggle('from-gray-800', isMigrating);
+        startMigrationButton.classList.toggle('to-gray-900', isMigrating);
+        startMigrationButton.classList.toggle('border', isMigrating);
+        startMigrationButton.classList.toggle('border-gray-700', isMigrating);
+        startMigrationButton.classList.toggle('text-gray-500', isMigrating);
         startMigrationButton.classList.toggle('cursor-not-allowed', isMigrating);
-        if (lucide) lucide.createIcons({elements: [startMigrationButton]});
+        startMigrationButton.classList.toggle('shadow-none', isMigrating);
+        
+        if (window.lucide) window.lucide.createIcons({elements: [startMigrationButton]});
     }
     
     function updateMainStatusDisplay(statusData) {
         let iconName = 'info';
-        let statusColorClasses = 'bg-gray-100 text-gray-700';
+        let statusColorClasses = 'border border-gray-800 text-gray-400 bg-gray-900 bg-opacity-50';
         let statusText = statusData.status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 
         completedStatusDisplay.classList.add('hidden'); 
         errorStatusDisplay.classList.add('hidden');
 
         if (statusData.status === "completed") {
-            iconName = "check-circle"; statusColorClasses = "bg-green-100 text-green-700";
+            iconName = "check-circle"; 
+            statusColorClasses = "glow-pulse-green border border-emerald-500 bg-emerald-950 bg-opacity-20 text-emerald-400";
             completedStatusDisplay.classList.remove('hidden');
         } else if (statusData.status === "error") {
-            iconName = "alert-triangle"; statusColorClasses = "bg-red-100 text-red-700";
+            iconName = "alert-triangle"; 
+            statusColorClasses = "glow-pulse-red border border-red-500 bg-red-950 bg-opacity-20 text-red-400";
             errorStatusDisplay.classList.remove('hidden');
             if(errorMessageText && statusData.error_message) errorMessageText.textContent = statusData.error_message;
             else if(errorMessageText) errorMessageText.textContent = "An unspecified error occurred during migration.";
-        } else if (["running", "initializing", "migrating_groups", "migrating_projects"].includes(statusData.status)) {
-            iconName = "loader"; statusColorClasses = "bg-blue-100 text-blue-700";
-            if (statusIconDisplay) statusIconDisplay.innerHTML = '<span class="inline-block w-6 h-6 mr-2 rounded-full bg-blue-500 animate-pulse-icon"></span>';
+        } else if (["running", "initializing", "migrating_users", "migrating_groups", "migrating_projects"].includes(statusData.status)) {
+            iconName = "loader-2"; 
+            statusColorClasses = "glow-pulse-blue border border-indigo-500 bg-indigo-950 bg-opacity-20 text-indigo-400";
+            if (statusIconDisplay) statusIconDisplay.innerHTML = '<i data-lucide="loader-2" class="inline-block mr-2 w-6 h-6 animate-spin-custom"></i>';
         } else { // idle
-             statusColorClasses = "bg-gray-100 text-gray-800"; // Changed text color
+             statusColorClasses = "border border-gray-800 text-gray-450 bg-gray-900 bg-opacity-50";
              iconName = "info";
-             if (statusIconDisplay) statusIconDisplay.innerHTML = `<i data-lucide="${iconName}" class="inline-block mr-2 w-6 h-6"></i>`;
+             if (statusIconDisplay) statusIconDisplay.innerHTML = `<i data-lucide="${iconName}" class="inline-block mr-2 w-6 h-6 text-gray-500"></i>`;
         }
-        if (migrationStatusDisplay) migrationStatusDisplay.className = `p-4 rounded-lg text-center transition-all duration-300 ${statusColorClasses}`;
+        
+        if (migrationStatusDisplay) migrationStatusDisplay.className = `status-indicator p-4 rounded-xl text-center transition-all duration-300 ${statusColorClasses}`;
         if (statusTextDisplay) statusTextDisplay.textContent = statusText;
-        if (statusIconDisplay && iconName !== "loader") { // Render if not loader (loader is custom span)
+        if (statusIconDisplay && iconName !== "loader-2") { // Render if not loader-2 (loader is custom spin)
             statusIconDisplay.innerHTML = `<i data-lucide="${iconName}" class="inline-block mr-2 w-6 h-6"></i>`;
         }
 
@@ -175,36 +273,40 @@ document.addEventListener('DOMContentLoaded', () => {
              showOverallProgress = true; overallProgress = 1; // Show a sliver for initializing/running
         }
 
-
         if (overallProgressContainer) {
             if (showOverallProgress) {
                 overallProgressContainer.classList.remove('hidden');
                 overallProgressBar.style.width = `${overallProgress}%`;
                 overallProgressBar.textContent = `${overallProgress}%`;
                 overallProgressPercent.textContent = `${overallProgress}%`;
-                overallProgressBar.classList.toggle('bg-green-500', statusData.status === "completed");
-                overallProgressBar.classList.toggle('bg-purple-500', statusData.status !== "completed");
             } else {
                 overallProgressContainer.classList.add('hidden');
             }
         }
         
         if (currentActionIndicator) {
-            let indicatorText = ""; let indicatorIcon = "loader-2"; let indicatorColor = "text-gray-700";
+            let indicatorText = ""; let indicatorIcon = "loader-2"; let indicatorColor = "text-gray-400";
             if (statusData.status === "migrating_users" && statusData.stats?.users) {
-                indicatorText = `User: ${statusData.stats.users.current_item_name || 'Scanning...'}`; indicatorIcon = "user"; indicatorColor = "text-green-600";
+                indicatorText = `User: ${statusData.stats.users.current_item_name || 'Scanning...'}`; indicatorIcon = "user"; indicatorColor = "text-emerald-400";
+                lastActiveItemName = statusData.stats.users.current_item_name || "";
             } else if (statusData.status === "migrating_groups" && statusData.stats?.groups) {
-                indicatorText = `Group: ${statusData.stats.groups.current_item_name || 'Scanning...'}`; indicatorIcon = "users"; indicatorColor = "text-blue-600";
+                indicatorText = `Group: ${statusData.stats.groups.current_item_name || 'Scanning...'}`; indicatorIcon = "folder-git-2"; indicatorColor = "text-indigo-400";
+                lastActiveItemName = statusData.stats.groups.current_item_name || "";
             } else if (statusData.status === "migrating_projects" && statusData.stats?.projects) {
-                indicatorText = `Project: ${statusData.stats.projects.current_item_name || 'Scanning...'}`; indicatorIcon = "package"; indicatorColor = "text-purple-600";
+                indicatorText = `Project: ${statusData.stats.projects.current_item_name || 'Scanning...'}`; indicatorIcon = "git-branch"; indicatorColor = "text-purple-400";
+                lastActiveItemName = statusData.stats.projects.current_item_name || "";
             } else if (statusData.status === "running" || statusData.status === "initializing") {
-                indicatorText = statusData.current_action; indicatorIcon = "loader-2"; indicatorColor = "text-indigo-600";
+                indicatorText = statusData.current_action; indicatorIcon = "loader-2"; indicatorColor = "text-indigo-400";
+                lastActiveItemName = "";
             } else if (statusData.status === "idle") {
                  indicatorText = "Idle. Ready to start."; indicatorIcon = "info";
+                 lastActiveItemName = "";
             } else if (statusData.status === "completed") {
-                 indicatorText = "Migration Completed!"; indicatorIcon = "check-circle"; indicatorColor = "text-green-600";
+                 indicatorText = "Migration Completed!"; indicatorIcon = "check-circle"; indicatorColor = "text-emerald-400";
+                 lastActiveItemName = "";
             } else if (statusData.status === "error") {
-                 indicatorText = "Error Occurred!"; indicatorIcon = "alert-triangle"; indicatorColor = "text-red-600";
+                 indicatorText = "Error Occurred!"; indicatorIcon = "alert-triangle"; indicatorColor = "text-red-400";
+                 lastActiveItemName = "";
             }
 
             if (indicatorText) {
@@ -214,12 +316,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentActionIndicator.classList.add('hidden');
             }
         }
-        if (lucide) lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons();
     }
 
     function updateStatsUI(stats) {
         if (!statsContainer || !stats) {
-            statsContainer.innerHTML = '<div class="text-gray-500 text-sm p-3">Stats not available yet...</div>';
+            statsContainer.innerHTML = '<div class="text-gray-500 text-sm p-4 text-center">Stats not available yet...</div>';
             return;
         }
         statsContainer.innerHTML = ''; 
@@ -233,81 +335,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 const percentage = total > 0 ? Math.round((completed / total) * 100) : (completed > 0 ? 100 : 0);
                 
                 const statDiv = document.createElement('div');
-                statDiv.className = 'p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200';
+                statDiv.className = 'p-4 rounded-xl border border-gray-800 bg-gray-900 bg-opacity-50 hover:bg-opacity-80 transition-all duration-300';
                 statDiv.innerHTML = `
-                    <div class="flex items-center mb-1.5">
-                      <i data-lucide="${config.icon}" class="mr-2 text-${config.color}-500 w-5 h-5"></i>
-                      <h3 class="font-semibold text-gray-700 text-md">${config.label}</h3>
+                    <div class="flex items-center mb-2">
+                      <i data-lucide="${config.icon}" class="mr-2 ${config.colorClass} w-5 h-5"></i>
+                      <h3 class="font-semibold text-gray-200 text-sm tracking-wide">${config.label}</h3>
                     </div>
                     <div class="ml-7">
-                      <div class="flex justify-between text-xs text-gray-500 mb-0.5">
+                      <div class="flex justify-between text-xs text-gray-400 mb-1">
                         <span>Processed:</span>
-                        <span class="font-medium text-gray-700">${completed} / ${total || '...'}</span>
+                        <span class="font-bold text-gray-200">${completed} / ${total || '...'}</span>
                       </div>
-                      <div class="w-full h-2.5 bg-gray-300 rounded-full overflow-hidden">
+                      <div class="w-full h-2 bg-gray-950 border border-gray-800 rounded-full overflow-hidden p-0.5">
                         <div 
-                          class="h-2.5 bg-${config.color}-500 rounded-full transition-width duration-300" 
+                          class="h-full ${config.bgClass} rounded-full transition-all duration-500" 
                           style="width: ${percentage}%">
                         </div>
                       </div>
-                      ${statData.current_item_name ? `<p class="text-xs text-gray-400 mt-1 truncate" title="${statData.current_item_name}">Current: ${statData.current_item_name}</p>` : '<p class="text-xs text-gray-400 mt-1">-</p>'}
+                      ${statData.current_item_name ? `<p class="text-[10px] text-gray-500 mt-1.5 truncate" title="${statData.current_item_name}">Current: <span class="font-mono text-gray-400">${statData.current_item_name}</span></p>` : '<p class="text-[10px] text-gray-500 mt-1.5">-</p>'}
                     </div>
                 `;
                 statsContainer.appendChild(statDiv);
             }
         });
-        if (lucide) lucide.createIcons({context: statsContainer});
+        if (window.lucide) window.lucide.createIcons({context: statsContainer});
     }
     
     function updateLogUI(logEntries) {
         if (!logOutputContainer) return;
+        
+        if (logEntries.length === 0) {
+            logOutputContainer.innerHTML = '<div class="text-gray-600 italic">Logs stream here in real-time as tasks complete...</div>';
+            if (logCountElement) logCountElement.textContent = '0';
+            return;
+        }
+
         logOutputContainer.innerHTML = logEntries.map(log => {
             let colorClass = "text-gray-300"; 
             let icon = "info";
-            if (log.type === "warning") { colorClass = "text-yellow-400"; icon="alert-circle"; }
-            if (log.type === "error") { colorClass = "text-red-400 font-semibold"; icon="alert-triangle"; }
-            return `<div class="${colorClass} mb-0.5 flex items-start"><i data-lucide="${icon}" class="w-3 h-3 mr-1.5 mt-0.5 flex-shrink-0"></i><span class="text-gray-500">[${log.timestamp}] </span><span>${log.message}</span></div>`;
+            let iconColor = "text-indigo-400";
+            if (log.type === "warning") { colorClass = "text-yellow-300"; icon="alert-circle"; iconColor="text-yellow-400"; }
+            if (log.type === "error") { colorClass = "text-red-400 font-medium"; icon="alert-triangle"; iconColor="text-red-400"; }
+            return `<div class="${colorClass} mb-1 flex items-start font-mono"><i data-lucide="${icon}" class="w-3.5 h-3.5 mr-2 mt-0.5 flex-shrink-0 ${iconColor}"></i><span class="text-gray-600">[${log.timestamp}]&nbsp;</span><span>${log.message}</span></div>`;
         }).join('');
         
-        if (logOutputContainer.scrollTop + logOutputContainer.clientHeight >= logOutputContainer.scrollHeight - 30) {
+        if (logOutputContainer.scrollTop + logOutputContainer.clientHeight >= logOutputContainer.scrollHeight - 60) {
              logOutputContainer.scrollTop = logOutputContainer.scrollHeight;
         }
         if(logCountElement) logCountElement.textContent = logEntries.length;
-        if (lucide) lucide.createIcons({context: logOutputContainer});
+        if (window.lucide) window.lucide.createIcons({context: logOutputContainer});
     }
     
-    // --- Moving Files Animation ---
-    function createAndAnimateFile() {
-        if (!movingFilesContainer || activeMovingFiles.length >= MAX_MOVING_FILES || Math.random() > 0.3) return;
-
-        const fileEl = document.createElement('div');
-        fileEl.className = 'moving-file p-1 rounded shadow-md'; // Added padding and shadow
-        const iconType = fileVisualIcons[Math.floor(Math.random() * fileVisualIcons.length)];
-        const colors = ["text-blue-400", "text-green-400", "text-purple-400", "text-yellow-400", "text-pink-400"];
-        const iconColor = colors[Math.floor(Math.random() * colors.length)];
-
-        fileEl.innerHTML = `<i data-lucide="${iconType}" class="${iconColor} w-3 h-3"></i>`;
-        
-        const startY = Math.random() * 60 + 20; 
-        fileEl.style.top = `${startY}%`;
-        fileEl.style.left = '28%'; 
-        movingFilesContainer.appendChild(fileEl);
-        if (lucide) lucide.createIcons({ elements: [fileEl.querySelector('i')] });
-
-        activeMovingFiles.push(fileEl);
-
-        let currentLeft = 28;
-        const animationInterval = setInterval(() => {
-            currentLeft += (Math.random() * 0.5 + 0.5); // Vary speed slightly
-            fileEl.style.left = `${currentLeft}%`;
-            if (currentLeft >= 72) { 
-                clearInterval(animationInterval);
-                if (fileEl.parentElement) fileEl.parentElement.removeChild(fileEl);
-                activeMovingFiles = activeMovingFiles.filter(f => f !== fileEl);
-            }
-        }, 50 + Math.random() * 30); 
-    }
-
     function fetchAndUpdateStatus() {
         fetch(getStatusUrl)
             .then(response => {
@@ -321,18 +399,19 @@ document.addEventListener('DOMContentLoaded', () => {
                                             data.status === "migrating_groups" || 
                                             data.status === "migrating_projects";
                 
+                currentMigrationStatus = data.status; // Update global state
+                
                 updateButtonState(isCurrentlyMigrating, isCurrentlyMigrating ? 'Migration in Progress...' : 'Start Full Migration');
                 updateMainStatusDisplay(data);
                 updateStatsUI(data.stats);
                 updateLogUI(data.logs);
 
                 if (isCurrentlyMigrating) {
-                    createAndAnimateFile(); 
+                    startAnimationLoop(); 
                 } else {
                     if (pollingInterval) clearInterval(pollingInterval);
                     pollingInterval = null;
-                    if (movingFilesContainer) movingFilesContainer.innerHTML = ''; 
-                    activeMovingFiles = [];
+                    stopAnimationLoop();
                 }
             })
             .catch(error => {
@@ -340,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateMainStatusDisplay({status: "error", current_action: "Error fetching status from server.", error_message: error.message});
                 if (pollingInterval) clearInterval(pollingInterval);
                 pollingInterval = null;
+                stopAnimationLoop();
                 updateButtonState(false, 'Start Failed - Retry?');
             });
     }
@@ -347,7 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkLucideAndInit() {
         if (typeof lucide !== 'undefined' && lucide.createIcons) {
             console.log("Lucide is ready. Initializing UI.");
-            lucide.createIcons(); // Initial full render of static icons
+            window.lucide = lucide;
+            window.lucide.createIcons(); // Initial full render of static icons
             fetchAndUpdateStatus(); // Fetch status immediately on load
             
             // Determine if polling should start based on initial status
@@ -360,6 +441,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                                data.status === "migrating_groups" ||
                                                data.status === "migrating_projects";
                     if (isInitiallyMigrating) {
+                        currentMigrationStatus = data.status;
+                        startAnimationLoop();
                         if (!pollingInterval) {
                             pollingInterval = setInterval(fetchAndUpdateStatus, pollingTime);
                         }

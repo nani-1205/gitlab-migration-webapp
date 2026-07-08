@@ -47,6 +47,10 @@ state_lock = threading.Lock()
 gl_old = None
 gl_new = None
 
+OLD_TO_NEW_GROUP_ID_MAP = {}
+OLD_TO_NEW_USER_ID_MAP = {}
+CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
+
 # --- Logging and State Update ---
 def _log_and_update_state(message, log_type="info", action=None, section=None, item_name=None, increment_completed=False, error_msg=None, set_status=None):
     global current_migration_state
@@ -92,6 +96,56 @@ def get_full_group_object(gl_instance, group_id_or_lazy_obj, context="old"):
         _log_and_update_state(f"Could not get full group object for {context}_id {group_id}: {e}", log_type="warning")
         return None
 
+def get_user_namespace_id_on_new(username):
+    if not gl_new or not username: return None
+    try:
+        namespaces = gl_new.namespaces.list(search=username)
+        for ns in namespaces:
+            if ns.kind == 'user' and ns.path.lower() == username.lower():
+                return ns.id
+    except Exception as e:
+        _log_and_update_state(f"Error finding namespace for user '{username}': {e}", log_type="warning")
+    return None
+
+def migrate_group_members(old_group_id_or_obj, new_group):
+    if not old_group_id_or_obj or not new_group:
+        return
+    try:
+        if hasattr(old_group_id_or_obj, 'members'):
+            old_group = old_group_id_or_obj
+        else:
+            old_group = gl_old.groups.get(old_group_id_or_obj)
+            
+        old_members = old_group.members.list(all=True)
+        _log_and_update_state(f"Found {len(old_members)} members in old group '{old_group.name}'. Migrating permissions...")
+        
+        new_members = new_group.members.list(all=True)
+        new_member_user_ids = {m.id for m in new_members}
+        
+        for old_member in old_members:
+            new_user_id = OLD_TO_NEW_USER_ID_MAP.get(old_member.id)
+            if not new_user_id:
+                _log_and_update_state(f"  User {old_member.username} (ID {old_member.id}) not mapped to target. Skipping group permission migration.", log_type="warning")
+                continue
+                
+            if new_user_id in new_member_user_ids:
+                try:
+                    new_member_obj = new_group.members.get(new_user_id)
+                    if new_member_obj.access_level != old_member.access_level:
+                        new_member_obj.access_level = old_member.access_level
+                        new_member_obj.save()
+                        _log_and_update_state(f"  Updated group member {old_member.username} access level to {old_member.access_level} in group '{new_group.name}'.")
+                except Exception as e_mem_upd:
+                    _log_and_update_state(f"  Failed to update group member {old_member.username} access level in '{new_group.name}': {e_mem_upd}", log_type="warning")
+            else:
+                try:
+                    new_group.members.create({'user_id': new_user_id, 'access_level': old_member.access_level})
+                    _log_and_update_state(f"  Added member {old_member.username} to group '{new_group.name}' with access level {old_member.access_level}.")
+                except Exception as e_mem_add:
+                    _log_and_update_state(f"  Failed to add member {old_member.username} to group '{new_group.name}': {e_mem_add}", log_type="warning")
+    except Exception as e:
+        _log_and_update_state(f"Error migrating members for group: {e}", log_type="warning")
+
 def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=None):
     name = old_group_obj_full.name; path_slug = old_group_obj_full.path
     visibility = old_group_obj_full.visibility; description = old_group_obj_full.description or ""
@@ -111,6 +165,7 @@ def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=N
         if candidate_groups:
             existing_group = gl_new.groups.get(candidate_groups[0].id)
             _log_and_update_state(f"Group '{existing_group.name}' (Path: {existing_group.path}) already exists with NEW ID {existing_group.id}. Using it.")
+            migrate_group_members(old_group_obj_full, existing_group)
             return existing_group
     except Exception as e_check: _log_and_update_state(f"Warning: Error during pre-check for group '{name}': {e_check}. Proceeding to create.", log_type="warning")
     
@@ -120,6 +175,7 @@ def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=N
         _log_and_update_state(f"Creating group with payload: {json.dumps(payload)}")
         new_group = gl_new.groups.create(payload)
         _log_and_update_state(f"Successfully created group '{new_group.name}' with NEW ID {new_group.id}.")
+        migrate_group_members(old_group_obj_full, new_group)
         return new_group
     except gitlab.exceptions.GitlabCreateError as e:
         _log_and_update_state(f"ERROR creating group '{name}'. API: {e.error_message}. Resp: {e.response_body}", log_type="error")
@@ -133,7 +189,11 @@ def create_or_find_group_on_new(old_group_obj_full, new_parent_id_for_creation=N
                 else:
                     all_groups = gl_new.groups.list(all=True)
                     found_groups = [g for g in all_groups if g.path == path_slug and g.parent_id is None]
-                if found_groups: _log_and_update_state(f"Found existing group '{found_groups[0].name}' ID {found_groups[0].id} on retry."); return gl_new.groups.get(found_groups[0].id)
+                if found_groups: 
+                    _log_and_update_state(f"Found existing group '{found_groups[0].name}' ID {found_groups[0].id} on retry.")
+                    found_group_obj = gl_new.groups.get(found_groups[0].id)
+                    migrate_group_members(old_group_obj_full, found_group_obj)
+                    return found_group_obj
              except Exception as e_retry_find: _log_and_update_state(f"  Retry find also failed: {e_retry_find}", log_type="warning")
         return None
     except Exception as e_unexp: _log_and_update_state(f"UNEXPECTED ERROR creating group '{name}': {e_unexp}", log_type="error"); return None
@@ -305,6 +365,39 @@ def migrate_project_repo_py(
 
     if not new_project: _log_and_update_state(f"ERROR: new_project is None for old project '{project_name_old}'. Cannot proceed.", log_type="error"); return False
 
+    # Migrate project members
+    try:
+        old_project = gl_old.projects.get(project_id_old)
+        old_members = old_project.members.list(all=True)
+        _log_and_update_state(f"Found {len(old_members)} members in old project '{project_name_old}'. Migrating permissions...")
+        
+        new_members = new_project.members.list(all=True)
+        new_member_user_ids = {m.id for m in new_members}
+        
+        for old_member in old_members:
+            new_user_id = OLD_TO_NEW_USER_ID_MAP.get(old_member.id)
+            if not new_user_id:
+                _log_and_update_state(f"  User {old_member.username} (ID {old_member.id}) not mapped to target. Skipping project permission migration.", log_type="warning")
+                continue
+                
+            if new_user_id in new_member_user_ids:
+                try:
+                    new_member_obj = new_project.members.get(new_user_id)
+                    if new_member_obj.access_level != old_member.access_level:
+                        new_member_obj.access_level = old_member.access_level
+                        new_member_obj.save()
+                        _log_and_update_state(f"  Updated member {old_member.username} access level to {old_member.access_level} (target user ID: {new_user_id}).")
+                except Exception as e_member_update:
+                    _log_and_update_state(f"  Failed to update member {old_member.username} (target user ID: {new_user_id}): {e_member_update}", log_type="warning")
+            else:
+                try:
+                    new_project.members.create({'user_id': new_user_id, 'access_level': old_member.access_level})
+                    _log_and_update_state(f"  Added member {old_member.username} with access level {old_member.access_level} (target user ID: {new_user_id}).")
+                except Exception as e_member_add:
+                    _log_and_update_state(f"  Failed to add member {old_member.username} (target user ID: {new_user_id}): {e_member_add}", log_type="warning")
+    except Exception as e_members:
+        _log_and_update_state(f"Error migrating members for project '{project_name_old}': {e_members}", log_type="warning")
+
     if new_project.attributes.get('empty_repo') is False:
         _log_and_update_state(f"Repository '{new_project.name}' already contains data on target. Skipping clone and push.", action=f"Skipped: {project_name_old} (already migrated)")
         return True
@@ -340,6 +433,7 @@ def migrate_project_repo_py(
     return True
 
 def migrate_users_py():
+    global OLD_TO_NEW_USER_ID_MAP
     _log_and_update_state("=== PHASE 0: Migrating Users ===", action="Starting user migration")
     with state_lock: current_migration_state["status"] = "migrating_users"
     if not gl_old or not gl_new: return
@@ -350,15 +444,30 @@ def migrate_users_py():
         _log_and_update_state(f"Found {len(old_users)} users in old GitLab.")
         
         new_users = gl_new.users.list(all=True)
-        new_user_emails = {u.email for u in new_users if getattr(u, 'email', None)}
-        new_user_usernames = {u.username for u in new_users}
+        new_user_emails = {u.email.lower() for u in new_users if getattr(u, 'email', None)}
+        new_user_usernames = {u.username.lower() for u in new_users}
+        new_user_id_by_username = {u.username.lower(): u.id for u in new_users}
+        new_user_id_by_email = {u.email.lower(): u.id for u in new_users if getattr(u, 'email', None)}
         
         for u in old_users:
             if u.username == 'root': 
+                new_root_id = new_user_id_by_username.get('root')
+                if new_root_id:
+                    OLD_TO_NEW_USER_ID_MAP[u.id] = new_root_id
+                    _log_and_update_state(f"Mapped old root user ID {u.id} to new root user ID {new_root_id}.")
                 with state_lock: current_migration_state["stats"]["users"]["completed"] += 1
                 continue # skip root
-            if u.username in new_user_usernames or (getattr(u, 'email', None) and u.email in new_user_emails):
-                _log_and_update_state(f"User {u.username} already exists in new GitLab. Skipping.", section="users", item_name=u.username, increment_completed=True)
+                
+            # Check if user already exists
+            existing_id = None
+            if u.username.lower() in new_user_usernames:
+                existing_id = new_user_id_by_username[u.username.lower()]
+            elif getattr(u, 'email', None) and u.email.lower() in new_user_emails:
+                existing_id = new_user_id_by_email[u.email.lower()]
+                
+            if existing_id:
+                OLD_TO_NEW_USER_ID_MAP[u.id] = existing_id
+                _log_and_update_state(f"User {u.username} already exists in new GitLab (ID: {existing_id}). Skipping creation.", section="users", item_name=u.username, increment_completed=True)
                 continue
                 
             _log_and_update_state(f"Creating user {u.username}...", action=f"Creating user {u.username}", section="users", item_name=u.username)
@@ -371,8 +480,9 @@ def migrate_users_py():
                 'skip_confirmation': True
             }
             try:
-                gl_new.users.create(payload)
-                _log_and_update_state(f"Created user {u.username} successfully.", section="users", item_name=u.username, increment_completed=True)
+                new_u = gl_new.users.create(payload)
+                OLD_TO_NEW_USER_ID_MAP[u.id] = new_u.id
+                _log_and_update_state(f"Created user {u.username} successfully (New ID: {new_u.id}).", section="users", item_name=u.username, increment_completed=True)
             except Exception as e:
                 _log_and_update_state(f"Failed to create user {u.username}: {e}", log_type="error", section="users", item_name=u.username, increment_completed=True)
                 
@@ -382,12 +492,12 @@ def migrate_users_py():
     _log_and_update_state("=== FINISHED PHASE 0: User Migration ===", action="User migration complete")
 
 def run_full_migration():
-    global migration_status_log, OLD_TO_NEW_GROUP_ID_MAP, CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE, current_migration_state
+    global migration_status_log, OLD_TO_NEW_GROUP_ID_MAP, OLD_TO_NEW_USER_ID_MAP, CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE, current_migration_state
     with state_lock:
         current_migration_state["status"] = "initializing"; current_migration_state["logs"] = []
         current_migration_state["error_message"] = None
         current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": ""}}
-    OLD_TO_NEW_GROUP_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
+    OLD_TO_NEW_GROUP_ID_MAP = {}; OLD_TO_NEW_USER_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
     try: initialize_gitlab_clients()
     except Exception as e: _log_and_update_state(f"Halting: client init failure: {e}", log_type="error", error_msg=str(e), set_status="error"); return
     if os.path.exists(MIGRATION_TEMP_DIR): _log_and_update_state(f"Cleaning old temp dir: {MIGRATION_TEMP_DIR}"); shutil.rmtree(MIGRATION_TEMP_DIR)
@@ -463,7 +573,15 @@ def run_full_migration():
                         _log_and_update_state(f"ERROR: Could not dynamically map group ID {old_namespace_id} (project: {project_namespace_path_old}). Skipping.", log_type="error")
                         projects_failed_processing_count += 1
                         continue
-            elif old_namespace_kind == 'user': _log_and_update_state(f"Project '{project_name_old}' is user project. Will create under token owner.")
+            elif old_namespace_kind == 'user':
+                username_old = namespace_info.get('path')
+                _log_and_update_state(f"Project '{project_name_old}' is a user project owned by '{username_old}'. Resolving user namespace on target...")
+                resolved_user_ns_id = get_user_namespace_id_on_new(username_old)
+                if resolved_user_ns_id:
+                    new_target_namespace_id = resolved_user_ns_id
+                    _log_and_update_state(f"  Resolved user '{username_old}' namespace ID: {new_target_namespace_id}.")
+                else:
+                    _log_and_update_state(f"  Could not find user '{username_old}' namespace on target. Falling back to token owner namespace.", log_type="warning")
             else: _log_and_update_state(f"Unknown namespace kind '{old_namespace_kind}' for '{project_name_old}'. Skipping.", log_type="warning"); projects_failed_processing_count +=1; continue
             
             if migrate_project_repo_py(project_id_old, project_name_old, project_path_old, project_namespace_path_old, 

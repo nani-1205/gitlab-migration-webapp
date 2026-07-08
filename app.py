@@ -6,7 +6,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = os.urandom(24)
+
+@app.after_request
+def add_header(r):
+    r.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    r.headers["Pragma"] = "no-cache"
+    r.headers["Expires"] = "0"
+    return r
+
 
 migration_thread = None
 is_migration_task_active_flask_flag = False # Flask app's view of an active task
@@ -49,6 +58,7 @@ def start_migration_route():
             "projects": {"total": 0, "completed": 0, "current_item_name": ""},
         }
         migration_logic.OLD_TO_NEW_GROUP_ID_MAP = {}
+        migration_logic.OLD_TO_NEW_USER_ID_MAP = {}
         migration_logic.CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
 
     migration_logic._log_and_update_state("Received request to start migration.", action="Initiating migration", set_status="initializing")

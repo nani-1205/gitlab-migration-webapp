@@ -182,7 +182,12 @@ If the user running the script on the Migration Control Server (e.g., `root`) do
 
 ## Running the Application
 
-The application will be accessible via the IP address of your Migration Control Server on port `5001` (by default).
+The application is structured as a Flask web server (`app.py`) that serves the dashboard UI and spawns the migration scripts inside a background thread. 
+
+> [!WARNING]
+> **Do not run `migration_logic.py` under PM2 directly.**
+> `migration_logic.py` is a single-run script. If run directly under PM2, it will execute the migration once and exit immediately. PM2 will interpret this as a crash and restart the process continuously, spamming your GitLab servers. 
+> To run the dashboard in the background and perform migrations safely, always run **`app.py`** under PM2.
 
 1.  **Activate Virtual Environment (if not already):**
     ```bash
@@ -195,9 +200,9 @@ The application will be accessible via the IP address of your Migration Control 
     ```bash
     pm2 start app.py --name gitlab-migration-app --interpreter venv/bin/python
     ```
-    *   View logs: `pm2 logs gitlab-migration-app` (or `pm2 logs 0` if it's ID 0)
-    *   Stop: `pm2 stop gitlab-migration-app`
-    *   Restart: `pm2 restart gitlab-migration-app`
+    *   **View dashboard logs:** `pm2 logs gitlab-migration-app`
+    *   **Stop server:** `pm2 stop gitlab-migration-app`
+    *   **Restart server:** `pm2 restart gitlab-migration-app`
 
 3.  **Access the Web UI:**
     Open your web browser and navigate to `http://<ip_of_migration_control_server>:5001`.
