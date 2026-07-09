@@ -116,8 +116,12 @@ def migrate_group_members(old_group_id_or_obj, new_group):
         else:
             old_group = gl_old.groups.get(old_group_id_or_obj)
             
-        old_members = old_group.members.list(all=True)
-        _log_and_update_state(f"Found {len(old_members)} members in old group '{old_group.name}'. Migrating permissions...")
+        try:
+            old_members = old_group.members_all.list(all=True)
+            _log_and_update_state(f"Found {len(old_members)} members (including inherited) in old group '{old_group.name}'. Migrating permissions...")
+        except AttributeError:
+            old_members = old_group.members.list(all=True)
+            _log_and_update_state(f"Found {len(old_members)} direct members in old group '{old_group.name}'. Migrating permissions...")
         
         new_members = new_group.members.list(all=True)
         new_member_user_ids = {m.id for m in new_members}
@@ -368,8 +372,12 @@ def migrate_project_repo_py(
     # Migrate project members
     try:
         old_project = gl_old.projects.get(project_id_old)
-        old_members = old_project.members.list(all=True)
-        _log_and_update_state(f"Found {len(old_members)} members in old project '{project_name_old}'. Migrating permissions...")
+        try:
+            old_members = old_project.members_all.list(all=True)
+            _log_and_update_state(f"Found {len(old_members)} members (including inherited) in old project '{project_name_old}'. Migrating permissions...")
+        except AttributeError:
+            old_members = old_project.members.list(all=True)
+            _log_and_update_state(f"Found {len(old_members)} direct members in old project '{project_name_old}'. Migrating permissions...")
         
         new_members = new_project.members.list(all=True)
         new_member_user_ids = {m.id for m in new_members}
@@ -419,10 +427,18 @@ def migrate_project_repo_py(
     if clone_proc.returncode != 0:
         if "empty repository" in clone_proc.stderr.lower(): _log_and_update_state(f"INFO: Old project '{project_namespace_path_old}' is empty. Skipping push."); shutil.rmtree(temp_repo_path, ignore_errors=True); return True 
         _log_and_update_state(f"ERROR: Failed to clone '{old_repo_url}'. Stderr: {clone_proc.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
-    _log_and_update_state(f"Pushing branches and tags from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
+    _log_and_update_state(f"Pushing from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
     try:
         subprocess.run(['git', '--git-dir', temp_repo_path, 'remote', 'add', 'aws-target', new_repo_url], check=True, capture_output=True, text=True)
-        push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--force', 'aws-target', 'refs/heads/*:refs/heads/*', 'refs/tags/*:refs/tags/*'], capture_output=True, text=True, check=False)
+        
+        # Try a full mirror push first to get all refs (including custom ones)
+        push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--mirror', 'aws-target'], capture_output=True, text=True, check=False)
+        
+        # If GitLab blocks it because of hidden refs (like MRs), fallback to standard branches and tags
+        if push_proc.returncode != 0 and ("deny updating a hidden ref" in push_proc.stderr or "protected" in push_proc.stderr):
+            _log_and_update_state(f"Push --mirror failed with: {push_proc.stderr.strip()}. Falling back to refs/heads and refs/tags.")
+            push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--force', 'aws-target', 'refs/heads/*:refs/heads/*', 'refs/tags/*:refs/tags/*'], capture_output=True, text=True, check=False)
+
     except subprocess.CalledProcessError as e_remote: _log_and_update_state(f"ERROR adding remote for '{new_repo_url_log}'. Stderr: {e_remote.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
     finally: shutil.rmtree(temp_repo_path, ignore_errors=True)
     if push_proc.returncode != 0:
@@ -536,7 +552,8 @@ def run_full_migration():
         page = 1; per_page_projects = 20 
         while True:
             _log_and_update_state(f"Fetching projects page {page} (per_page={per_page_projects})...", action=f"Listing projects (Page {page})")
-            projects_on_page = gl_old.projects.list(page=page, per_page=per_page_projects, archived=False, statistics=False, simple=True, as_list=True, all=False)
+            # Removed archived=False and simple=True to fetch ALL projects with full metadata
+            projects_on_page = gl_old.projects.list(page=page, per_page=per_page_projects, statistics=False, as_list=True, all=False)
             if not projects_on_page: _log_and_update_state("No more project stubs on this page."); break
             old_projects_stubs_list.extend(projects_on_page)
             _log_and_update_state(f"Fetched {len(projects_on_page)} project stubs. Total stubs: {len(old_projects_stubs_list)}")
