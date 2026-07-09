@@ -271,10 +271,10 @@ def migrate_groups_recursive_py(old_parent_group_id_for_subgroup_listing=None, n
                 parent_obj_old = get_full_group_object(gl_old, old_parent_group_id_for_subgroup_listing, "old parent")
                 if not parent_obj_old: break
                 _log_and_update_state(f"Fetching subgroups for old group: '{parent_obj_old.full_path}' (Page {page})", action=f"Listing subgroups of {parent_obj_old.name}")
-                old_subgroups_page_lazy = parent_obj_old.subgroups.list(page=page, per_page=per_page, as_list=False)
+                old_subgroups_page_lazy = parent_obj_old.subgroups.list(page=page, per_page=per_page, as_list=True, all_available=True)
             else:
                 _log_and_update_state(f"Fetching top-level groups (Page {page})", action="Listing top-level groups")
-                old_subgroups_page_lazy = gl_old.groups.list(page=page, per_page=per_page, as_list=False, top_level_only=True)
+                old_subgroups_page_lazy = gl_old.groups.list(page=page, per_page=per_page, as_list=True, top_level_only=True, all_available=True)
         except Exception as e: _log_and_update_state(f"ERROR fetching groups/subgroups list for old_parent_id '{old_parent_group_id_for_subgroup_listing}': {e}", log_type="error"); break
         
         processed_on_page = 0
@@ -521,7 +521,7 @@ def run_full_migration():
 
     try: # Estimate totals
         _log_and_update_state("Estimating total groups...", action="Estimating groups")
-        all_old_groups_paginated = gl_old.groups.list(all=True, as_list=False, per_page=1)
+        all_old_groups_paginated = gl_old.groups.list(all=True, as_list=False, per_page=1, all_available=True)
         with state_lock: current_migration_state["stats"]["groups"]["total"] = all_old_groups_paginated.total_items if hasattr(all_old_groups_paginated, 'total_items') else 1 # Avoid div by zero if total not available
         _log_and_update_state(f"Estimated total groups: {current_migration_state['stats']['groups']['total']}")
     except Exception as e: _log_and_update_state(f"Warning: Could not estimate total groups: {e}", log_type="warning")
