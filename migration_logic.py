@@ -585,7 +585,7 @@ def run_full_migration():
 
     with state_lock: current_migration_state["status"] = "migrating_projects"
     _log_and_update_state("=== PHASE 2: Migrating Projects and Repositories ===", action="Starting project migration")
-    projects_migrated_ok_count = 0; projects_failed_processing_count = 0
+    projects_migrated_ok_count = 0; projects_failed_processing_count = 0; total_errors_encountered = 0
     old_projects_stubs_list = []
     try:
         _log_and_update_state("Fetching all project stubs from old GitLab (manual pagination)...", action="Listing old projects")
@@ -666,6 +666,7 @@ def run_full_migration():
                 if project_id_old in failed_repos_retry_counts:
                     with state_lock: current_migration_state["stats"]["projects"]["errors_resolved"] += 1
             else:
+                total_errors_encountered += 1
                 retries = failed_repos_retry_counts.get(project_id_old, 0)
                 if retries < MAX_RETRIES:
                     failed_repos_retry_counts[project_id_old] = retries + 1
@@ -686,6 +687,7 @@ def run_full_migration():
             FAILED_REPOS.append({"Repo Name": old_project_stub.name if old_project_stub else 'Unknown', "Old URL": getattr(old_project_stub, 'path_with_namespace', 'Unknown'), "Reason": err_msg})
             projects_failed_processing_count += 1
         except Exception as e_proj_loop:
+            total_errors_encountered += 1
             project_id = old_project_stub.id if old_project_stub else 'N/A'
             retries = failed_repos_retry_counts.get(project_id, 0)
             if retries < MAX_RETRIES and old_project_stub:
@@ -701,7 +703,7 @@ def run_full_migration():
         
         # Also update global stats count for failed
         with state_lock:
-            current_migration_state["stats"]["projects"]["failed"] = projects_failed_processing_count
+            current_migration_state["stats"]["projects"]["failed"] = total_errors_encountered
 
     _log_and_update_state("=== MIGRATION COMPLETE ===", action="Migration finished", set_status="completed");
     _log_and_update_state(f"Successfully processed Git data for: {projects_migrated_ok_count} projects.")
