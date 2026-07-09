@@ -52,15 +52,17 @@ body.app-bg {
 
 .cube-face.right {
     width: 40px;
-    background: linear-gradient(90deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%);
-    border-left: 1px solid rgba(255,255,255,0.1);
+    background: linear-gradient(90deg, rgba(40,53,74,1) 0%, rgba(20,29,48,1) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
     transform: rotateY(90deg) translateZ(220px); /* width 240 - 20 */
     border-radius: 0 12px 12px 0;
 }
 
 .cube-face.top {
     height: 40px;
-    background: rgba(30,41,59,0.8);
+    background: rgba(40,53,74,0.95);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-bottom: none;
     transform: rotateX(90deg) translateZ(20px);
     border-radius: 12px 12px 0 0;
 }
