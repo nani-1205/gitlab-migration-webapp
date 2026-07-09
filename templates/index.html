@@ -74,8 +74,10 @@
       </div>
     </header>
 
-    <!-- Visualizer Canvas -->
-    <div id="migrationVisualization" class="flex-1 relative z-10 mx-6 mt-4 mb-4 rounded-3xl border border-gray-800/60 overflow-hidden shadow-2xl visualizer-bg flex justify-between px-10 py-6 lg:px-20 xl:px-32">
+    <!-- Scrollable Visualizer Wrapper -->
+    <div class="flex-1 overflow-y-auto overflow-x-hidden flex flex-col relative z-10">
+      <!-- Visualizer Canvas -->
+      <div id="migrationVisualization" class="flex-1 min-h-[650px] relative mx-6 mt-4 mb-4 rounded-3xl border border-gray-800/60 overflow-hidden shadow-2xl visualizer-bg flex justify-between px-10 py-6 lg:px-20 xl:px-32">
        
        <!-- Glowing Cables SVG Layer -->
        <svg class="absolute inset-0 w-full h-full pointer-events-none" id="cablesSvg" preserveAspectRatio="none">
@@ -221,11 +223,12 @@
             <div class="cube-face right"></div>
          </div>
 
+         </div>
        </div>
-
-        <!-- Overlays (Completed/Error) -->
-        <div id="completedStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm z-40 transition-all duration-300">
-          <div class="glass-card p-10 max-w-md text-center border-emerald-500 border shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl">
+       
+       <!-- Overlays (Completed/Error) -->
+       <div id="completedStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm z-40 transition-all duration-300 rounded-3xl">
+         <div class="glass-card p-10 max-w-md text-center border-emerald-500 border shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl">
             <div class="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-400 shadow-[0_0_20px_#10b981]">
               <i data-lucide="check-circle" class="text-emerald-400 w-10 h-10"></i>
             </div>
@@ -237,7 +240,7 @@
             </div>
           </div>
         </div>
-        <div id="errorStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm z-40 transition-all duration-300">
+        <div id="errorStatusDisplay" class="hidden absolute inset-0 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm z-40 transition-all duration-300 rounded-3xl">
           <div class="glass-card p-10 max-w-md text-center border-red-500 border shadow-[0_0_40px_rgba(239,68,68,0.2)] rounded-3xl">
             <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-400 shadow-[0_0_20px_#ef4444]">
               <i data-lucide="alert-triangle" class="text-red-400 w-10 h-10"></i>
@@ -250,6 +253,7 @@
             </div>
           </div>
         </div>
+      </div>
     </div>
 
     <!-- Terminal Console Log -->
