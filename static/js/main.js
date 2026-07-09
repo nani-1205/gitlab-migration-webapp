@@ -255,6 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalFailed = (data.stats.users.failed || 0) + (data.stats.groups.failed || 0) + (data.stats.projects.failed || 0);
                 errorCountDisplay.textContent = totalFailed;
             }
+            const errorsResolvedDisplay = document.getElementById('errorsResolvedDisplay');
+            if (errorsResolvedDisplay) {
+                const totalResolved = (data.stats.projects.errors_resolved || 0);
+                errorsResolvedDisplay.textContent = totalResolved;
+            }
         }
 
         if (data.metrics && data.stats) {
@@ -328,17 +333,18 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function fetchAndUpdateStatus() {
         fetch(getStatusUrl)
-            .then(r => { if(!r.ok) throw new Error(); return r.json(); })
+            .then(r => r.json())
             .then(data => {
                 const isRunning = ["running", "initializing", "migrating_users", "migrating_groups", "migrating_projects"].includes(data.status);
-                currentMigrationStatus = data.status;
                 
-                updateButtonState(isRunning, isRunning ? 'Pause / Cancel' : 'Start / Resume');
                 updateMainStatusDisplay(data);
                 updateLogUI(data.logs);
 
                 if (isRunning) {
                     startAnimationLoop(); 
+                    if (!pollingInterval) {
+                        pollingInterval = setInterval(fetchAndUpdateStatus, pollingTime);
+                    }
                 } else {
                     if (pollingInterval) clearInterval(pollingInterval);
                     pollingInterval = null;

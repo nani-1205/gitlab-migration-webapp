@@ -38,7 +38,7 @@ current_migration_state = {
     "current_action": "Waiting to start...",
     "stats": {
         "groups": {"total": 0, "completed": 0, "current_item_name": ""},
-        "projects": {"total": 0, "completed": 0, "current_item_name": ""},
+        "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0, "errors_resolved": 0},
     },
     "metrics": {
         "start_time": None,
@@ -534,7 +534,7 @@ def run_full_migration():
     with state_lock:
         current_migration_state["status"] = "initializing"; current_migration_state["logs"] = []
         current_migration_state["error_message"] = None
-        current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0}}
+        current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0, "errors_resolved": 0}}
         current_migration_state["metrics"] = {"start_time": time.time(), "data_flowing_bytes": 0, "avg_speed_mb_s": 0}
     OLD_TO_NEW_GROUP_ID_MAP = {}; OLD_TO_NEW_USER_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
     FAILED_REPOS.clear()
@@ -646,6 +646,8 @@ def run_full_migration():
                                        new_target_namespace_id)
             if success:
                 projects_migrated_ok_count += 1
+                if project_id_old in failed_repos_retry_counts:
+                    with state_lock: current_migration_state["stats"]["projects"]["errors_resolved"] += 1
             else:
                 retries = failed_repos_retry_counts.get(project_id_old, 0)
                 if retries < MAX_RETRIES:

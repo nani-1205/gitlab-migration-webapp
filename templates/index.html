@@ -75,7 +75,7 @@
     </header>
 
     <!-- Visualizer Canvas -->
-    <div id="migrationVisualization" class="flex-1 relative z-10 mx-8 mt-6 mb-6 rounded-3xl border border-gray-800/60 overflow-hidden shadow-2xl visualizer-bg">
+    <div id="migrationVisualization" class="flex-1 relative z-10 mx-8 mt-6 mb-6 rounded-3xl border border-gray-800/60 overflow-hidden shadow-2xl visualizer-bg flex justify-between px-10 py-10 lg:px-20 xl:px-32">
        
        <!-- Glowing Cables SVG Layer -->
        <svg class="absolute inset-0 w-full h-full pointer-events-none" id="cablesSvg" preserveAspectRatio="none">
@@ -91,60 +91,62 @@
        <div id="movingFilesContainer" class="absolute inset-0 w-full h-full pointer-events-none z-20"></div>
 
        <!-- Source Server Cube -->
-       <div class="absolute top-[8%] left-[8%] server-cube source-cube group" id="sourceNode">
-          <div class="cube-face front flex flex-col">
-             <div class="absolute top-0 right-0 w-12 h-full bg-gradient-to-l from-black/60 to-transparent pointer-events-none"></div>
-             <div class="p-5 h-full flex flex-col justify-between relative z-10 w-full">
-                <div class="flex items-center text-indigo-400 mb-2">
-                   <img src="https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png" class="w-8 h-8 mr-3 object-contain drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]">
-                   <div>
-                     <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-300">SOURCE</div>
-                     <div class="text-white font-bold text-lg leading-tight drop-shadow">GitLab Server</div>
-                   </div>
-                </div>
-                <div class="text-[11px] text-gray-400 font-mono mb-4 px-1 truncate" title="{{ config.OLD_GITLAB_URL }}">IP: {{ config.OLD_GITLAB_URL }}</div>
-                
-                <div class="space-y-3 text-xs flex-1">
-                   <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
-                      <span class="text-gray-500">Instance:</span><span class="text-gray-300 font-mono">GL-CORP-SRV</span>
-                   </div>
-                   <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
-                      <span class="text-gray-500">Groups:</span><span class="text-gray-300 font-mono font-bold" id="srcGroupsCnt">-</span>
-                   </div>
-                   <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
-                      <span class="text-gray-500">Projects:</span><span class="text-gray-300 font-mono font-bold" id="srcProjCnt">-</span>
-                   </div>
-                   <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
-                      <span class="text-gray-500">Users:</span><span class="text-gray-300 font-mono font-bold" id="srcUsersCnt">-</span>
-                   </div>
-                   <div class="flex justify-between pt-1.5 px-1">
-                      <span class="text-gray-500">Status:</span><span class="text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">Connected</span>
-                   </div>
-                </div>
-             </div>
-          </div>
-          <!-- Re-added top and right faces for 3D effect -->
-          <div class="cube-face top"></div>
-          <div class="cube-face right"></div>
+       <div class="relative z-10 self-start" id="sourceWrapper">
+         <div class="server-cube source-cube group" id="sourceNode">
+            <div class="cube-face front flex flex-col">
+               <div class="absolute top-0 right-0 w-12 h-full bg-gradient-to-l from-black/60 to-transparent pointer-events-none"></div>
+               <div class="p-5 h-full flex flex-col justify-between relative z-10 w-full">
+                  <div class="flex items-center text-indigo-400 mb-2">
+                     <img src="https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png" class="w-8 h-8 mr-3 object-contain drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]">
+                     <div>
+                       <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-300">SOURCE</div>
+                       <div class="text-white font-bold text-lg leading-tight drop-shadow">GitLab Server</div>
+                     </div>
+                  </div>
+                  <div class="text-[11px] text-gray-400 font-mono mb-4 px-1 truncate" title="{{ config.OLD_GITLAB_URL }}">IP: {{ config.OLD_GITLAB_URL }}</div>
+                  
+                  <div class="space-y-3 text-xs flex-1">
+                     <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
+                        <span class="text-gray-500">Instance:</span><span class="text-gray-300 font-mono truncate max-w-[120px]" title="{{ config.OLD_GITLAB_URL }}">{{ config.OLD_GITLAB_URL.split('//')[-1] }}</span>
+                     </div>
+                     <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
+                        <span class="text-gray-500">Groups:</span><span class="text-gray-300 font-mono font-bold" id="srcGroupsCnt">-</span>
+                     </div>
+                     <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
+                        <span class="text-gray-500">Projects:</span><span class="text-gray-300 font-mono font-bold" id="srcProjCnt">-</span>
+                     </div>
+                     <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
+                        <span class="text-gray-500">Users:</span><span class="text-gray-300 font-mono font-bold" id="srcUsersCnt">-</span>
+                     </div>
+                     <div class="flex justify-between pt-1.5 px-1">
+                        <span class="text-gray-500">Status:</span><span class="text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">Connected</span>
+                     </div>
+                  </div>
+               </div>
+            </div>
+            <div class="cube-face top"></div>
+            <div class="cube-face right"></div>
+         </div>
        </div>
 
        <!-- Target Server Cube -->
-       <div class="absolute bottom-[10%] right-[32%] lg:right-[25%] server-cube target-cube group" id="targetNode">
-          <div class="cube-face front flex flex-col">
+       <div class="relative z-10 self-end lg:mr-72" id="targetWrapper">
+         <div class="server-cube target-cube group" id="targetNode">
+            <div class="cube-face front flex flex-col">
              <div class="absolute top-0 right-0 w-12 h-full bg-gradient-to-l from-black/60 to-transparent pointer-events-none"></div>
              <div class="p-5 h-full flex flex-col justify-between relative z-10 w-full">
                 <div class="flex items-center text-emerald-400 mb-2">
-                   <i data-lucide="box" class="w-8 h-8 mr-3 text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]"></i>
+                   <img src="https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png" class="w-8 h-8 mr-3 object-contain filter hue-rotate-180 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]">
                    <div>
                      <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-300">TARGET</div>
-                     <div class="text-white font-bold text-lg leading-tight drop-shadow">AWS GitLab</div>
+                     <div class="text-white font-bold text-lg leading-tight drop-shadow">New GitLab</div>
                    </div>
                 </div>
-                <div class="text-[11px] text-gray-400 font-mono mb-4 px-1 truncate">AWS-EUCENTRAL1</div>
+                <div class="text-[11px] text-gray-400 font-mono mb-4 px-1 truncate" title="{{ config.NEW_GITLAB_URL }}">IP: {{ config.NEW_GITLAB_URL }}</div>
                 
                 <div class="space-y-3 text-xs flex-1">
                    <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
-                      <span class="text-gray-500">Instance:</span><span class="text-gray-300 font-mono">aws-gl-instance</span>
+                      <span class="text-gray-500">Instance:</span><span class="text-gray-300 font-mono truncate max-w-[120px]" title="{{ config.NEW_GITLAB_URL }}">{{ config.NEW_GITLAB_URL.split('//')[-1] }}</span>
                    </div>
                    <div class="flex justify-between border-b border-gray-800/80 pb-1.5 px-1">
                       <span class="text-gray-500">Ready:</span><span class="text-gray-300 font-mono font-bold text-emerald-400">Yes</span>
@@ -161,6 +163,7 @@
           <!-- Re-added top and right faces for 3D effect -->
           <div class="cube-face top"></div>
           <div class="cube-face right"></div>
+         </div>
        </div>
 
        <!-- Floating Right Metrics -->
@@ -184,9 +187,15 @@
             </div>
             <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mt-3"><div id="filesSyncedBar" class="h-full bg-emerald-500 w-[0%] shadow-[0_0_8px_#10b981] transition-all duration-500"></div></div>
           </div>
-          <div>
-            <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="alert-circle" class="w-4 h-4 mr-1.5 text-red-400"></i> Errors</div>
-            <div class="text-white font-bold text-2xl tracking-tight" id="errorCountDisplay">0</div>
+          <div class="flex justify-between">
+              <div>
+                <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="alert-circle" class="w-4 h-4 mr-1.5 text-red-400"></i> Errors</div>
+                <div class="text-white font-bold text-xl tracking-tight" id="errorCountDisplay">0</div>
+              </div>
+              <div>
+                <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="check-circle" class="w-4 h-4 mr-1.5 text-emerald-400"></i> Resolved</div>
+                <div class="text-white font-bold text-xl tracking-tight" id="errorsResolvedDisplay">0</div>
+              </div>
           </div>
           <div class="text-[10px] text-gray-500 uppercase tracking-widest pt-4 border-t border-gray-800/60 font-semibold">Current metric summary</div>
        </div>

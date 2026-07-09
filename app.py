@@ -59,7 +59,7 @@ def start_migration_route():
         migration_logic.current_migration_state["stats"] = {
             "users": {"total": 0, "completed": 0, "current_item_name": ""},
             "groups": {"total": 0, "completed": 0, "current_item_name": ""},
-            "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0},
+            "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0, "errors_resolved": 0},
         }
         migration_logic.OLD_TO_NEW_GROUP_ID_MAP = {}
         migration_logic.OLD_TO_NEW_USER_ID_MAP = {}
