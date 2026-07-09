@@ -138,7 +138,8 @@ def migrate_group_members(old_group_id_or_obj, new_group):
         try:
             old_members = old_group.members_all.list(all=True)
             _log_and_update_state(f"Found {len(old_members)} members (including inherited) in old group '{old_group.name}'. Migrating permissions...")
-        except AttributeError:
+        except Exception as e:
+            _log_and_update_state(f"Warning: Could not fetch inherited members for group '{old_group.name}' ({e}). Falling back to direct members.")
             old_members = old_group.members.list(all=True)
             _log_and_update_state(f"Found {len(old_members)} direct members in old group '{old_group.name}'. Migrating permissions...")
         
@@ -395,7 +396,8 @@ def migrate_project_repo_py(
         try:
             old_members = old_project.members_all.list(all=True)
             _log_and_update_state(f"Found {len(old_members)} members (including inherited) in old project '{project_name_old}'. Migrating permissions...")
-        except AttributeError:
+        except Exception as e:
+            _log_and_update_state(f"Warning: Could not fetch inherited members for project '{project_name_old}' ({e}). Falling back to direct members.")
             old_members = old_project.members.list(all=True)
             _log_and_update_state(f"Found {len(old_members)} direct members in old project '{project_name_old}'. Migrating permissions...")
         
