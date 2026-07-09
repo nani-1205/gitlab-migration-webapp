@@ -449,11 +449,21 @@ def migrate_project_repo_py(
     if clone_proc.returncode != 0:
         if "empty repository" in clone_proc.stderr.lower(): _log_and_update_state(f"INFO: Old project '{project_namespace_path_old}' is empty. Skipping push."); shutil.rmtree(temp_repo_path, ignore_errors=True); return True 
         _log_and_update_state(f"ERROR: Failed to clone '{old_repo_url}'. Stderr: {clone_proc.stderr}", log_type="error"); shutil.rmtree(temp_repo_path, ignore_errors=True); return False
+    _log_and_update_state(f"Fetching LFS objects for '{project_name_old}'...", action=f"Fetching LFS: {project_name_old}")
+    lfs_fetch_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'lfs', 'fetch', '--all'], capture_output=True, text=True, check=False)
+    if lfs_fetch_proc.returncode != 0:
+        _log_and_update_state(f"Note: LFS fetch output (safe to ignore if no LFS): {lfs_fetch_proc.stderr.strip()}", log_type="info")
+
     _log_and_update_state(f"Pushing from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
     try:
         subprocess.run(['git', '--git-dir', temp_repo_path, 'remote', 'add', 'aws-target', new_repo_url], check=True, capture_output=True, text=True)
         # Increase http.postBuffer to 2GB to support pushing very large repositories (300MB - 2GB+)
         subprocess.run(['git', '--git-dir', temp_repo_path, 'config', 'http.postBuffer', '2147483648'], check=True, capture_output=True, text=True)
+        
+        _log_and_update_state(f"Pushing LFS objects to target...", action=f"Pushing LFS: {project_name_old}")
+        lfs_push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'lfs', 'push', '--all', 'aws-target'], capture_output=True, text=True, check=False)
+        if lfs_push_proc.returncode != 0:
+             _log_and_update_state(f"Note: LFS push output: {lfs_push_proc.stderr.strip()}", log_type="info")
         
         # Try a full mirror push first to get all refs (including custom ones)
         push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--mirror', 'aws-target'], capture_output=True, text=True, check=False)
