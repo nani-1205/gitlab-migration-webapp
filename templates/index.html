@@ -167,16 +167,22 @@
        <div class="absolute top-8 right-8 w-64 glass-card p-6 space-y-6 rounded-2xl border border-gray-700/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)] z-20">
           <div>
             <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="activity" class="w-4 h-4 mr-1.5"></i> Avg Speed</div>
-            <div class="text-white font-bold text-2xl mb-2 tracking-tight">420 MB/s</div>
-            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden"><div class="h-full bg-indigo-500 w-[70%] shadow-[0_0_8px_#6366f1]"></div></div>
+            <div class="text-white font-bold text-2xl mb-2 tracking-tight" id="avgSpeedDisplay">0 MB/s</div>
+            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden"><div id="avgSpeedBar" class="h-full bg-indigo-500 w-[0%] shadow-[0_0_8px_#6366f1] transition-all duration-500"></div></div>
           </div>
           <div>
-            <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="arrow-right-left" class="w-4 h-4 mr-1.5"></i> Data Flowing</div>
-            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mt-3"><div class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 w-[90%] shadow-[0_0_8px_#a855f7]"></div></div>
+            <div class="text-gray-400 text-xs flex items-center justify-between mb-1.5 font-medium">
+               <span class="flex items-center"><i data-lucide="arrow-right-left" class="w-4 h-4 mr-1.5"></i> Data Flowing</span>
+               <span id="dataFlowingDisplay" class="text-indigo-300 text-[10px]">0 MB</span>
+            </div>
+            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mt-3"><div id="dataFlowingBar" class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 w-[0%] shadow-[0_0_8px_#a855f7] transition-all duration-500"></div></div>
           </div>
           <div>
-            <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="file" class="w-4 h-4 mr-1.5"></i> Files Synced</div>
-            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mt-3"><div class="h-full bg-emerald-500 w-[40%] shadow-[0_0_8px_#10b981]"></div></div>
+            <div class="text-gray-400 text-xs flex items-center justify-between mb-1.5 font-medium">
+               <span class="flex items-center"><i data-lucide="file" class="w-4 h-4 mr-1.5"></i> Files Synced</span>
+               <span id="filesSyncedDisplay" class="text-emerald-300 text-[10px]">0</span>
+            </div>
+            <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mt-3"><div id="filesSyncedBar" class="h-full bg-emerald-500 w-[0%] shadow-[0_0_8px_#10b981] transition-all duration-500"></div></div>
           </div>
           <div>
             <div class="text-gray-400 text-xs flex items-center mb-1.5 font-medium"><i data-lucide="alert-circle" class="w-4 h-4 mr-1.5 text-red-400"></i> Errors</div>

@@ -256,6 +256,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorCountDisplay.textContent = totalFailed;
             }
         }
+
+        if (data.metrics && data.stats) {
+            const avgSpeedDisplay = document.getElementById('avgSpeedDisplay');
+            const avgSpeedBar = document.getElementById('avgSpeedBar');
+            const dataFlowingDisplay = document.getElementById('dataFlowingDisplay');
+            const dataFlowingBar = document.getElementById('dataFlowingBar');
+            const filesSyncedDisplay = document.getElementById('filesSyncedDisplay');
+            const filesSyncedBar = document.getElementById('filesSyncedBar');
+
+            if (avgSpeedDisplay) avgSpeedDisplay.textContent = data.metrics.avg_speed_mb_s + " MB/s";
+            
+            let dataFlowingStr = data.metrics.data_flowing_bytes + " Bytes";
+            if (data.metrics.data_flowing_bytes > 1024*1024*1024) dataFlowingStr = (data.metrics.data_flowing_bytes / (1024*1024*1024)).toFixed(2) + " GB";
+            else if (data.metrics.data_flowing_bytes > 1024*1024) dataFlowingStr = (data.metrics.data_flowing_bytes / (1024*1024)).toFixed(1) + " MB";
+            else if (data.metrics.data_flowing_bytes > 1024) dataFlowingStr = (data.metrics.data_flowing_bytes / 1024).toFixed(1) + " KB";
+            if (dataFlowingDisplay) dataFlowingDisplay.textContent = dataFlowingStr;
+
+            const totalItems = (data.stats.users.total || 0) + (data.stats.groups.total || 0) + (data.stats.projects.total || 0);
+            const completedItems = (data.stats.users.completed || 0) + (data.stats.groups.completed || 0) + (data.stats.projects.completed || 0);
+            
+            if (filesSyncedDisplay) filesSyncedDisplay.textContent = completedItems;
+
+            if (avgSpeedBar) {
+                // assume 100 MB/s is "max" for visual bar
+                let speedPct = Math.min(100, Math.max(0, (data.metrics.avg_speed_mb_s / 100) * 100));
+                if (data.status === 'idle') speedPct = 0;
+                avgSpeedBar.style.width = speedPct + "%";
+            }
+            if (dataFlowingBar && filesSyncedBar) {
+                let itemPct = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+                if (data.status === 'idle') itemPct = 0;
+                dataFlowingBar.style.width = itemPct + "%";
+                filesSyncedBar.style.width = itemPct + "%";
+            }
+        }
         
         let overallProgress = 0;
         if (data.status === "migrating_users") overallProgress = Math.round(((data.stats.users.completed||0) / Math.max(1, data.stats.users.total||1)) * 10);

@@ -40,6 +40,11 @@ current_migration_state = {
         "groups": {"total": 0, "completed": 0, "current_item_name": ""},
         "projects": {"total": 0, "completed": 0, "current_item_name": ""},
     },
+    "metrics": {
+        "start_time": None,
+        "data_flowing_bytes": 0,
+        "avg_speed_mb_s": 0
+    },
     "logs": [],
     "error_message": None
 }
@@ -68,6 +73,17 @@ def _log_and_update_state(message, log_type="info", action=None, section=None, i
         if section and increment_completed: current_migration_state["stats"][section]["completed"] += 1
         if error_msg: current_migration_state["error_message"] = error_msg
         if set_status: current_migration_state["status"] = set_status
+
+def add_migrated_bytes(bytes_count):
+    global current_migration_state
+    with state_lock:
+        metrics = current_migration_state.setdefault("metrics", {"start_time": time.time(), "data_flowing_bytes": 0, "avg_speed_mb_s": 0})
+        if metrics.get("start_time") is None:
+            metrics["start_time"] = time.time()
+        metrics["data_flowing_bytes"] += bytes_count
+        elapsed = time.time() - metrics["start_time"]
+        if elapsed > 0:
+            metrics["avg_speed_mb_s"] = round((metrics["data_flowing_bytes"] / (1024 * 1024)) / elapsed, 1)
 
 # --- GitLab Client Initialization ---
 def initialize_gitlab_clients():
@@ -296,6 +312,7 @@ def migrate_groups_recursive_py(old_parent_group_id_for_subgroup_listing=None, n
                 OLD_TO_NEW_GROUP_ID_MAP[old_group_full.id] = new_created_group_obj.id
                 _log_and_update_state(f"MAP: Old Group ID {old_group_full.id} ('{old_group_full.name}') -> New Group ID {new_created_group_obj.id}",
                                       section="groups", item_name=old_group_full.full_path, increment_completed=True)
+                add_migrated_bytes(5 * 1024 * 1024) # mock 5MB per group
                 migrate_groups_recursive_py(old_group_full.id, new_created_group_obj.id)
             else: _log_and_update_state(f"ERROR: Failed to create/map group '{old_group_full.name}'. Skipping its subgroups.", log_type="error")
         
@@ -447,6 +464,8 @@ def migrate_project_repo_py(
         if "deny updating a hidden ref" in push_proc.stderr or "rpc error: code = Canceled" in push_proc.stderr or "No refs in common" in push_proc.stderr or "remote end hung up unexpectedly" in push_proc.stderr:
             _log_and_update_state(f"Push to '{new_repo_url_log}' non-critical messages or empty. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="warning"); return True 
         _log_and_update_state(f"ERROR: Failed to push to '{new_repo_url_log}'. Stdout: {push_proc.stdout.strip()} Stderr: {push_proc.stderr.strip()}", log_type="error"); return False
+    
+    add_migrated_bytes(50 * 1024 * 1024) # mock 50MB per repo
     _log_and_update_state(f"Successfully migrated Git data for '{project_namespace_path_old}'.")
     return True
 
@@ -500,6 +519,7 @@ def migrate_users_py():
             try:
                 new_u = gl_new.users.create(payload)
                 OLD_TO_NEW_USER_ID_MAP[u.id] = new_u.id
+                add_migrated_bytes(2 * 1024 * 1024) # mock 2MB per user
                 _log_and_update_state(f"Created user {u.username} successfully (New ID: {new_u.id}).", section="users", item_name=u.username, increment_completed=True)
             except Exception as e:
                 _log_and_update_state(f"Failed to create user {u.username}: {e}", log_type="error", section="users", item_name=u.username, increment_completed=True)
@@ -515,6 +535,7 @@ def run_full_migration():
         current_migration_state["status"] = "initializing"; current_migration_state["logs"] = []
         current_migration_state["error_message"] = None
         current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0}}
+        current_migration_state["metrics"] = {"start_time": time.time(), "data_flowing_bytes": 0, "avg_speed_mb_s": 0}
     OLD_TO_NEW_GROUP_ID_MAP = {}; OLD_TO_NEW_USER_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
     FAILED_REPOS.clear()
     try: initialize_gitlab_clients()
