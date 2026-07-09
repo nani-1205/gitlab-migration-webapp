@@ -596,7 +596,7 @@ def run_full_migration():
 
     processing_queue = deque(old_projects_stubs_list)
     failed_repos_retry_counts = {}
-    MAX_RETRIES = 3
+    MAX_RETRIES = 6
     processed_count = 0
     total_in_queue_ever = len(old_projects_stubs_list)
 
