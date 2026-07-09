@@ -57,6 +57,7 @@ OLD_TO_NEW_GROUP_ID_MAP = {}
 OLD_TO_NEW_USER_ID_MAP = {}
 CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
 FAILED_REPOS = []
+DONE_REPOS = []
 
 # --- Logging and State Update ---
 def _log_and_update_state(message, log_type="info", action=None, section=None, item_name=None, increment_completed=False, error_msg=None, set_status=None):
@@ -449,6 +450,8 @@ def migrate_project_repo_py(
     _log_and_update_state(f"Pushing from '{temp_repo_path}' to new remote '{new_repo_url}'...", action=f"Pushing: {project_name_old}")
     try:
         subprocess.run(['git', '--git-dir', temp_repo_path, 'remote', 'add', 'aws-target', new_repo_url], check=True, capture_output=True, text=True)
+        # Increase http.postBuffer to 2GB to support pushing very large repositories (300MB - 2GB+)
+        subprocess.run(['git', '--git-dir', temp_repo_path, 'config', 'http.postBuffer', '2147483648'], check=True, capture_output=True, text=True)
         
         # Try a full mirror push first to get all refs (including custom ones)
         push_proc = subprocess.run(['git', '--git-dir', temp_repo_path, 'push', '--mirror', 'aws-target'], capture_output=True, text=True, check=False)
@@ -538,6 +541,7 @@ def run_full_migration():
         current_migration_state["metrics"] = {"start_time": time.time(), "data_flowing_bytes": 0, "avg_speed_mb_s": 0}
     OLD_TO_NEW_GROUP_ID_MAP = {}; OLD_TO_NEW_USER_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
     FAILED_REPOS.clear()
+    DONE_REPOS.clear()
     try: initialize_gitlab_clients()
     except Exception as e: _log_and_update_state(f"Halting: client init failure: {e}", log_type="error", error_msg=str(e), set_status="error"); return
     if os.path.exists(MIGRATION_TEMP_DIR): _log_and_update_state(f"Cleaning old temp dir: {MIGRATION_TEMP_DIR}"); shutil.rmtree(MIGRATION_TEMP_DIR)
@@ -646,6 +650,7 @@ def run_full_migration():
                                        new_target_namespace_id)
             if success:
                 projects_migrated_ok_count += 1
+                DONE_REPOS.append({"Repo Name": project_name_old, "Old URL": project_namespace_path_old, "Status": "Success"})
                 if project_id_old in failed_repos_retry_counts:
                     with state_lock: current_migration_state["stats"]["projects"]["errors_resolved"] += 1
             else:

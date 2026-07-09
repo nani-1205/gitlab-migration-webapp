@@ -96,39 +96,76 @@ def get_status_json():
 @app.route('/download-report/xls', methods=['GET'])
 def download_report_xls():
     failed_repos = migration_logic.FAILED_REPOS
-    if not failed_repos:
-        failed_repos = [{"Repo Name": "None", "Old URL": "N/A", "Reason": "No failures recorded."}]
-    df = pd.DataFrame(failed_repos)
+    done_repos = migration_logic.DONE_REPOS
+    
+    all_repos = []
+    for r in done_repos:
+        all_repos.append({"Repo Name": r.get("Repo Name"), "Old URL": r.get("Old URL"), "Status": "Success", "Details": "Migrated successfully"})
+    for r in failed_repos:
+        all_repos.append({"Repo Name": r.get("Repo Name"), "Old URL": r.get("Old URL"), "Status": "Failed", "Details": r.get("Reason", "Unknown")})
+        
+    if not all_repos:
+        all_repos = [{"Repo Name": "None", "Old URL": "N/A", "Status": "N/A", "Details": "No migrations attempted."}]
+        
+    df = pd.DataFrame(all_repos)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Failed Migrations')
+        df.to_excel(writer, index=False, sheet_name='Migration Report')
     output.seek(0)
-    return send_file(output, download_name="failed_migrations_report.xlsx", as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return send_file(output, download_name="migration_report.xlsx", as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/download-report/pdf', methods=['GET'])
 def download_report_pdf():
     failed_repos = migration_logic.FAILED_REPOS
+    done_repos = migration_logic.DONE_REPOS
+    
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Failed GitLab Migrations Report", ln=True, align='C')
-    pdf.ln(10)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(200, 10, txt="GitLab Migration Execution Report", ln=True, align='C')
+    pdf.ln(5)
+    
+    # Successful Repos
+    pdf.set_font("Arial", style='B', size=12)
+    pdf.set_text_color(16, 185, 129) # Emerald green
+    pdf.cell(200, 10, txt=f"Successfully Migrated Repositories ({len(done_repos)})", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    
+    if not done_repos:
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 8, txt="No successful repository migrations recorded.", ln=True)
+    else:
+        for idx, repo in enumerate(done_repos, 1):
+            pdf.set_font("Arial", style='B', size=10)
+            pdf.cell(200, 6, txt=f"{idx}. {repo.get('Repo Name', 'Unknown')}", ln=True)
+            pdf.set_font("Arial", size=9)
+            pdf.cell(200, 5, txt=f"URL: {repo.get('Old URL', 'Unknown')}", ln=True)
+            pdf.ln(3)
+            
+    pdf.ln(5)
+    
+    # Failed Repos
+    pdf.set_font("Arial", style='B', size=12)
+    pdf.set_text_color(239, 68, 68) # Red
+    pdf.cell(200, 10, txt=f"Failed Migrations ({len(failed_repos)})", ln=True)
+    pdf.set_text_color(0, 0, 0)
     
     if not failed_repos:
-        pdf.cell(200, 10, txt="No failures recorded.", ln=True)
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 8, txt="No failures recorded.", ln=True)
     else:
         for idx, repo in enumerate(failed_repos, 1):
-            pdf.set_font("Arial", style='B', size=11)
-            pdf.cell(200, 8, txt=f"{idx}. {repo.get('Repo Name', 'Unknown')}", ln=True)
-            pdf.set_font("Arial", size=10)
-            pdf.cell(200, 6, txt=f"URL: {repo.get('Old URL', 'Unknown')}", ln=True)
-            pdf.multi_cell(0, 6, txt=f"Reason: {repo.get('Reason', 'Unknown')}")
-            pdf.ln(5)
+            pdf.set_font("Arial", style='B', size=10)
+            pdf.cell(200, 6, txt=f"{idx}. {repo.get('Repo Name', 'Unknown')}", ln=True)
+            pdf.set_font("Arial", size=9)
+            pdf.cell(200, 5, txt=f"URL: {repo.get('Old URL', 'Unknown')}", ln=True)
+            pdf.multi_cell(0, 5, txt=f"Reason: {repo.get('Reason', 'Unknown')}")
+            pdf.ln(3)
 
     output = io.BytesIO()
     output.write(pdf.output(dest='S').encode('latin-1'))
     output.seek(0)
-    return send_file(output, download_name="failed_migrations_report.pdf", as_attachment=True, mimetype='application/pdf')
+    return send_file(output, download_name="migration_report.pdf", as_attachment=True, mimetype='application/pdf')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=False)
