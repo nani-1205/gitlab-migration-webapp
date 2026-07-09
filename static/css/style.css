@@ -148,3 +148,14 @@ body.app-bg {
     from { stroke-dashoffset: 30; }
     to { stroke-dashoffset: 0; }
 }
+
+/* Responsive Scaling for Short Screens */
+@media (max-height: 850px) {
+    .server-cube {
+        transform: scale(0.8);
+        transform-origin: top center;
+    }
+    #targetNode {
+        transform-origin: bottom center;
+    }
+}
