@@ -2,6 +2,10 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 import migration_logic 
 import threading
 import os
+import io
+import pandas as pd
+from fpdf import FPDF
+from flask import send_file
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -55,7 +59,7 @@ def start_migration_route():
         migration_logic.current_migration_state["stats"] = {
             "users": {"total": 0, "completed": 0, "current_item_name": ""},
             "groups": {"total": 0, "completed": 0, "current_item_name": ""},
-            "projects": {"total": 0, "completed": 0, "current_item_name": ""},
+            "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0},
         }
         migration_logic.OLD_TO_NEW_GROUP_ID_MAP = {}
         migration_logic.OLD_TO_NEW_USER_ID_MAP = {}
@@ -88,6 +92,43 @@ def get_status_json():
     with migration_logic.state_lock:
         state_copy = dict(migration_logic.current_migration_state)
     return jsonify(state_copy)
+
+@app.route('/download-report/xls', methods=['GET'])
+def download_report_xls():
+    failed_repos = migration_logic.FAILED_REPOS
+    if not failed_repos:
+        failed_repos = [{"Repo Name": "None", "Old URL": "N/A", "Reason": "No failures recorded."}]
+    df = pd.DataFrame(failed_repos)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Failed Migrations')
+    output.seek(0)
+    return send_file(output, download_name="failed_migrations_report.xlsx", as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.route('/download-report/pdf', methods=['GET'])
+def download_report_pdf():
+    failed_repos = migration_logic.FAILED_REPOS
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Failed GitLab Migrations Report", ln=True, align='C')
+    pdf.ln(10)
+    
+    if not failed_repos:
+        pdf.cell(200, 10, txt="No failures recorded.", ln=True)
+    else:
+        for idx, repo in enumerate(failed_repos, 1):
+            pdf.set_font("Arial", style='B', size=11)
+            pdf.cell(200, 8, txt=f"{idx}. {repo.get('Repo Name', 'Unknown')}", ln=True)
+            pdf.set_font("Arial", size=10)
+            pdf.cell(200, 6, txt=f"URL: {repo.get('Old URL', 'Unknown')}", ln=True)
+            pdf.multi_cell(0, 6, txt=f"Reason: {repo.get('Reason', 'Unknown')}")
+            pdf.ln(5)
+
+    output = io.BytesIO()
+    output.write(pdf.output(dest='S').encode('latin-1'))
+    output.seek(0)
+    return send_file(output, download_name="failed_migrations_report.pdf", as_attachment=True, mimetype='application/pdf')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=False)

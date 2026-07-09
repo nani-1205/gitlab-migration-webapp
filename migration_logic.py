@@ -51,6 +51,7 @@ gl_new = None
 OLD_TO_NEW_GROUP_ID_MAP = {}
 OLD_TO_NEW_USER_ID_MAP = {}
 CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
+FAILED_REPOS = []
 
 # --- Logging and State Update ---
 def _log_and_update_state(message, log_type="info", action=None, section=None, item_name=None, increment_completed=False, error_msg=None, set_status=None):
@@ -513,8 +514,9 @@ def run_full_migration():
     with state_lock:
         current_migration_state["status"] = "initializing"; current_migration_state["logs"] = []
         current_migration_state["error_message"] = None
-        current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": ""}}
+        current_migration_state["stats"] = {"users": {"total": 0, "completed": 0, "current_item_name": ""}, "groups": {"total": 0, "completed": 0, "current_item_name": ""}, "projects": {"total": 0, "completed": 0, "current_item_name": "", "failed": 0}}
     OLD_TO_NEW_GROUP_ID_MAP = {}; OLD_TO_NEW_USER_ID_MAP = {}; CREATED_PROJECT_PATHS_IN_NEW_NAMESPACE = {}
+    FAILED_REPOS.clear()
     try: initialize_gitlab_clients()
     except Exception as e: _log_and_update_state(f"Halting: client init failure: {e}", log_type="error", error_msg=str(e), set_status="error"); return
     if os.path.exists(MIGRATION_TEMP_DIR): _log_and_update_state(f"Cleaning old temp dir: {MIGRATION_TEMP_DIR}"); shutil.rmtree(MIGRATION_TEMP_DIR)
@@ -596,7 +598,9 @@ def run_full_migration():
                     new_target_namespace_id = ensure_group_mapped_by_path(namespace_info, initial_new_parent_id)
                     
                     if not new_target_namespace_id:
-                        _log_and_update_state(f"ERROR: Could not dynamically map group ID {old_namespace_id} (project: {project_namespace_path_old}). Skipping.", log_type="error")
+                        err_msg = f"Could not dynamically map group ID {old_namespace_id}"
+                        _log_and_update_state(f"ERROR: {err_msg} (project: {project_namespace_path_old}). Skipping.", log_type="error")
+                        FAILED_REPOS.append({"Repo Name": project_name_old, "Old URL": project_namespace_path_old, "Reason": err_msg})
                         projects_failed_processing_count += 1
                         continue
             elif old_namespace_kind == 'user':
@@ -609,7 +613,9 @@ def run_full_migration():
                 else:
                     _log_and_update_state(f"  Could not find user '{username_old}' namespace on target. Falling back to token owner namespace.", log_type="warning")
             else: 
-                _log_and_update_state(f"Unknown namespace kind '{old_namespace_kind}' for '{project_name_old}'. Skipping.", log_type="warning")
+                err_msg = f"Unknown namespace kind '{old_namespace_kind}'"
+                _log_and_update_state(f"{err_msg} for '{project_name_old}'. Skipping.", log_type="warning")
+                FAILED_REPOS.append({"Repo Name": project_name_old, "Old URL": project_namespace_path_old, "Reason": err_msg})
                 projects_failed_processing_count += 1
                 continue
             
@@ -627,13 +633,17 @@ def run_full_migration():
                     processing_queue.append(old_project_stub)
                     total_in_queue_ever += 1 # To keep progress bar somewhat accurate or moving
                 else:
+                    err_msg = f"Max retries ({MAX_RETRIES}) reached due to network/execution delays."
                     _log_and_update_state(f"Max retries ({MAX_RETRIES}) reached for '{project_name_old}'. Giving up.", log_type="error")
+                    FAILED_REPOS.append({"Repo Name": project_name_old, "Old URL": project_namespace_path_old, "Reason": err_msg})
                     projects_failed_processing_count += 1
                     
             time.sleep(0.5)
         except AttributeError as ae:
-            _log_and_update_state(f"ATTRIBUTE ERROR processing stub ID {old_project_stub.id if old_project_stub else 'N/A'}: {ae}", log_type="error", error_msg=str(ae))
+            err_msg = f"ATTRIBUTE ERROR processing stub ID {old_project_stub.id if old_project_stub else 'N/A'}: {ae}"
+            _log_and_update_state(err_msg, log_type="error", error_msg=str(ae))
             _log_and_update_state(f"  Problematic stub: {old_project_stub.attributes if old_project_stub else 'N/A'}")
+            FAILED_REPOS.append({"Repo Name": old_project_stub.name if old_project_stub else 'Unknown', "Old URL": getattr(old_project_stub, 'path_with_namespace', 'Unknown'), "Reason": err_msg})
             projects_failed_processing_count += 1
         except Exception as e_proj_loop:
             project_id = old_project_stub.id if old_project_stub else 'N/A'
@@ -644,8 +654,14 @@ def run_full_migration():
                 processing_queue.append(old_project_stub)
                 total_in_queue_ever += 1
             else:
-                _log_and_update_state(f"UNEXPECTED ERROR in project loop for old ID {project_id} (Max retries reached): {e_proj_loop}", log_type="error", error_msg=str(e_proj_loop))
+                err_msg = f"UNEXPECTED ERROR in project loop for old ID {project_id} (Max retries reached): {e_proj_loop}"
+                _log_and_update_state(err_msg, log_type="error", error_msg=str(e_proj_loop))
+                FAILED_REPOS.append({"Repo Name": getattr(old_project_stub, 'name', 'Unknown'), "Old URL": getattr(old_project_stub, 'path_with_namespace', 'Unknown'), "Reason": err_msg})
                 projects_failed_processing_count += 1
+        
+        # Also update global stats count for failed
+        with state_lock:
+            current_migration_state["stats"]["projects"]["failed"] = projects_failed_processing_count
 
     _log_and_update_state("=== MIGRATION COMPLETE ===", action="Migration finished", set_status="completed");
     _log_and_update_state(f"Successfully processed Git data for: {projects_migrated_ok_count} projects.")

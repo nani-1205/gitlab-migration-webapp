@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const completedStatusDisplay = document.getElementById('completedStatusDisplay');
     const errorStatusDisplay = document.getElementById('errorStatusDisplay');
     const errorMessageText = document.getElementById('errorMessageText');
+    const completedReportButtons = document.getElementById('completedReportButtons');
+    const errorReportButtons = document.getElementById('errorReportButtons');
 
     const logOutputContainer = document.getElementById('logOutputContainer');
     const logCountElement = document.getElementById('logCount');
@@ -217,10 +219,24 @@ document.addEventListener('DOMContentLoaded', () => {
             iconName = "check-circle"; 
             statusColorClasses = "glow-pulse-green border border-emerald-500 bg-emerald-950 bg-opacity-20 text-emerald-400";
             completedStatusDisplay.classList.remove('hidden');
+            if (completedReportButtons) {
+                if (statusData.stats && statusData.stats.projects && statusData.stats.projects.failed > 0) {
+                    completedReportButtons.classList.remove('hidden');
+                } else {
+                    completedReportButtons.classList.add('hidden');
+                }
+            }
         } else if (statusData.status === "error") {
             iconName = "alert-triangle"; 
             statusColorClasses = "glow-pulse-red border border-red-500 bg-red-950 bg-opacity-20 text-red-400";
             errorStatusDisplay.classList.remove('hidden');
+            if (errorReportButtons) {
+                if (statusData.stats && statusData.stats.projects && statusData.stats.projects.failed > 0) {
+                    errorReportButtons.classList.remove('hidden');
+                } else {
+                    errorReportButtons.classList.add('hidden');
+                }
+            }
             if(errorMessageText && statusData.error_message) errorMessageText.textContent = statusData.error_message;
             else if(errorMessageText) errorMessageText.textContent = "An unspecified error occurred during migration.";
         } else if (["running", "initializing", "migrating_users", "migrating_groups", "migrating_projects"].includes(statusData.status)) {
