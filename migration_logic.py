@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import json
 import threading
 import re
+from collections import deque
 
 load_dotenv()
 
@@ -566,8 +567,16 @@ def run_full_migration():
             current_migration_state["stats"]["projects"]["total"] = len(old_projects_stubs_list)
     _log_and_update_state(f"Total project stubs fetched for processing: {len(old_projects_stubs_list)}.")
 
-    for i, old_project_stub in enumerate(old_projects_stubs_list):
-        with state_lock: current_migration_state["current_action"] = f"Processing project {i+1}/{len(old_projects_stubs_list)}: {old_project_stub.name}"
+    processing_queue = deque(old_projects_stubs_list)
+    failed_repos_retry_counts = {}
+    MAX_RETRIES = 3
+    processed_count = 0
+    total_in_queue_ever = len(old_projects_stubs_list)
+
+    while processing_queue:
+        old_project_stub = processing_queue.popleft()
+        processed_count += 1
+        with state_lock: current_migration_state["current_action"] = f"Processing project {processed_count}/{total_in_queue_ever} (Queue size: {len(processing_queue)+1}): {old_project_stub.name}"
         try:
             project_id_old = old_project_stub.id; project_name_old = old_project_stub.name
             project_path_old = old_project_stub.path; project_namespace_path_old = old_project_stub.path_with_namespace
@@ -599,22 +608,44 @@ def run_full_migration():
                     _log_and_update_state(f"  Resolved user '{username_old}' namespace ID: {new_target_namespace_id}.")
                 else:
                     _log_and_update_state(f"  Could not find user '{username_old}' namespace on target. Falling back to token owner namespace.", log_type="warning")
-            else: _log_and_update_state(f"Unknown namespace kind '{old_namespace_kind}' for '{project_name_old}'. Skipping.", log_type="warning"); projects_failed_processing_count +=1; continue
+            else: 
+                _log_and_update_state(f"Unknown namespace kind '{old_namespace_kind}' for '{project_name_old}'. Skipping.", log_type="warning")
+                projects_failed_processing_count += 1
+                continue
             
-            if migrate_project_repo_py(project_id_old, project_name_old, project_path_old, project_namespace_path_old, 
+            # Attempt migration
+            success = migrate_project_repo_py(project_id_old, project_name_old, project_path_old, project_namespace_path_old, 
                                        project_description_old, project_visibility_old, old_repo_ssh_url_from_stub, 
-                                       new_target_namespace_id):
+                                       new_target_namespace_id)
+            if success:
                 projects_migrated_ok_count += 1
-                # _log_and_update_state("", section="projects", increment_completed=True) # Done inside migrate_project_repo_py if successful push
-            else: projects_failed_processing_count += 1
+            else:
+                retries = failed_repos_retry_counts.get(project_id_old, 0)
+                if retries < MAX_RETRIES:
+                    failed_repos_retry_counts[project_id_old] = retries + 1
+                    _log_and_update_state(f"Network delay or failure for '{project_name_old}'. Re-queuing (Retry {retries + 1}/{MAX_RETRIES}).", log_type="warning")
+                    processing_queue.append(old_project_stub)
+                    total_in_queue_ever += 1 # To keep progress bar somewhat accurate or moving
+                else:
+                    _log_and_update_state(f"Max retries ({MAX_RETRIES}) reached for '{project_name_old}'. Giving up.", log_type="error")
+                    projects_failed_processing_count += 1
+                    
             time.sleep(0.5)
         except AttributeError as ae:
             _log_and_update_state(f"ATTRIBUTE ERROR processing stub ID {old_project_stub.id if old_project_stub else 'N/A'}: {ae}", log_type="error", error_msg=str(ae))
             _log_and_update_state(f"  Problematic stub: {old_project_stub.attributes if old_project_stub else 'N/A'}")
             projects_failed_processing_count += 1
         except Exception as e_proj_loop:
-            _log_and_update_state(f"UNEXPECTED ERROR in project loop for old ID {old_project_stub.id if old_project_stub else 'N/A'}: {e_proj_loop}", log_type="error", error_msg=str(e_proj_loop))
-            projects_failed_processing_count += 1
+            project_id = old_project_stub.id if old_project_stub else 'N/A'
+            retries = failed_repos_retry_counts.get(project_id, 0)
+            if retries < MAX_RETRIES and old_project_stub:
+                failed_repos_retry_counts[project_id] = retries + 1
+                _log_and_update_state(f"UNEXPECTED ERROR for '{old_project_stub.name}': {e_proj_loop}. Re-queuing (Retry {retries + 1}/{MAX_RETRIES}).", log_type="warning")
+                processing_queue.append(old_project_stub)
+                total_in_queue_ever += 1
+            else:
+                _log_and_update_state(f"UNEXPECTED ERROR in project loop for old ID {project_id} (Max retries reached): {e_proj_loop}", log_type="error", error_msg=str(e_proj_loop))
+                projects_failed_processing_count += 1
 
     _log_and_update_state("=== MIGRATION COMPLETE ===", action="Migration finished", set_status="completed");
     _log_and_update_state(f"Successfully processed Git data for: {projects_migrated_ok_count} projects.")
