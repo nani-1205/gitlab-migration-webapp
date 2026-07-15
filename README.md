@@ -6,6 +6,7 @@ This tool provides a web interface to manage and monitor the migration of GitLab
 - Group and subgroup hierarchies (including empty ones).
 - Projects within their correct new groups (or under the API token owner's namespace for old user-namespace projects).
 - Full Git repository data: all commits, branches, and tags (including for empty repositories).
+- Git LFS objects (Large File Storage).
 
 **This script does NOT migrate:** Issues, Merge Requests, CI/CD data, full user accounts (beyond creating projects under the API token owner), most specific project/group settings, or group/project members/permissions.
 
@@ -46,6 +47,7 @@ This tool provides a web interface to manage and monitor the migration of GitLab
    - Python 3.7+ installed.
    - `pip` and `venv` installed.
    - `git` command-line tool installed and in `PATH`.
+   - `git-lfs` installed (required for migrating repositories with Large File Storage).
    - `curl` command-line tool installed and in `PATH`.
    - `jq` command-line JSON processor installed and in `PATH`.
    - Network access to both Old and New GitLab instances (HTTP/S for API, SSH for Git).
@@ -216,6 +218,7 @@ The application is structured as a Flask web server (`app.py`) that serves the d
 3.  Monitor "Progress Overview" and "Activity Log" sections on the page for real-time updates.
     *   **Phase 1:** Group Hierarchy Migration.
     *   **Phase 2:** Projects & Repositories Migration (listing, creating, cloning, pushing).
+4.  Once the migration is complete, you can download a detailed execution report containing successful and failed repositories in PDF or XLS format.
 
 ---
 
